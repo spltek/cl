@@ -1,9 +1,11 @@
 package tui
 
 import (
+	"io"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 
 	"github.com/silvio/cl/internal/store"
 )
@@ -16,8 +18,14 @@ func testEntries() []store.Entry {
 	}
 }
 
+// testStyles returns a styles value suitable for tests, which don't
+// care about actual color output.
+func testStyles() styles {
+	return newStyles(lipgloss.NewRenderer(io.Discard))
+}
+
 func TestNewModel_NoFilterShowsAllEntries(t *testing.T) {
-	m := newModel("", testEntries())
+	m := newModel("", testEntries(), testStyles())
 
 	if len(m.filtered) != 3 {
 		t.Fatalf("filtered len = %d, want 3", len(m.filtered))
@@ -25,7 +33,7 @@ func TestNewModel_NoFilterShowsAllEntries(t *testing.T) {
 }
 
 func TestNewModel_FilterNarrowsByName(t *testing.T) {
-	m := newModel("bui", testEntries())
+	m := newModel("bui", testEntries(), testStyles())
 
 	if len(m.filtered) != 1 || m.filtered[0].Name != "build" {
 		t.Fatalf("filtered = %+v, want just %q", m.filtered, "build")
@@ -33,7 +41,7 @@ func TestNewModel_FilterNarrowsByName(t *testing.T) {
 }
 
 func TestUpdate_ArrowKeysMoveCursorWithinBounds(t *testing.T) {
-	m := newModel("", testEntries())
+	m := newModel("", testEntries(), testStyles())
 
 	// Moving up from the first row should have no effect.
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyUp})
@@ -59,7 +67,7 @@ func TestUpdate_ArrowKeysMoveCursorWithinBounds(t *testing.T) {
 }
 
 func TestUpdate_EnterSelectsHighlightedCommand(t *testing.T) {
-	m := newModel("clean", testEntries())
+	m := newModel("clean", testEntries(), testStyles())
 
 	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(model)
@@ -76,7 +84,7 @@ func TestUpdate_EnterSelectsHighlightedCommand(t *testing.T) {
 }
 
 func TestUpdate_EscCancelsWithoutSelection(t *testing.T) {
-	m := newModel("build", testEntries())
+	m := newModel("build", testEntries(), testStyles())
 
 	updated, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	m = updated.(model)
@@ -93,7 +101,7 @@ func TestUpdate_EscCancelsWithoutSelection(t *testing.T) {
 }
 
 func TestUpdate_TypingNarrowsFilterAndResetsCursor(t *testing.T) {
-	m := newModel("", testEntries())
+	m := newModel("", testEntries(), testStyles())
 
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	m = updated.(model)

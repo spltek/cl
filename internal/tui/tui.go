@@ -21,11 +21,27 @@ import (
 
 const maxVisibleRows = 10
 
-var (
-	selectedStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212"))
-	commandStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
-	helpStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-)
+// styles holds the lipgloss styles used by the picker. They must be
+// built from a renderer bound to the actual terminal we draw on
+// (see openTTY), not from lipgloss's default renderer: that default
+// detects color support from os.Stdout, which the shell integration
+// deliberately redirects via command substitution to capture the
+// final selection - checking os.Stdout there would always report "no
+// color", even though the picker itself renders on a real, colorful
+// terminal.
+type styles struct {
+	selected lipgloss.Style
+	command  lipgloss.Style
+	help     lipgloss.Style
+}
+
+func newStyles(r *lipgloss.Renderer) styles {
+	return styles{
+		selected: r.NewStyle().Bold(true).Foreground(lipgloss.Color("212")),
+		command:  r.NewStyle().Foreground(lipgloss.Color("244")),
+		help:     r.NewStyle().Foreground(lipgloss.Color("240")),
+	}
+}
 
 // nameSource adapts a slice of entry names to fuzzy.Source.
 type nameSource []string
@@ -41,9 +57,10 @@ type model struct {
 	scroll   int
 	selected string
 	quitting bool
+	styles   styles
 }
 
-func newModel(initialFilter string, entries []store.Entry) model {
+func newModel(initialFilter string, entries []store.Entry, st styles) model {
 	ti := textinput.New()
 	ti.Placeholder = "type to filter..."
 	ti.Prompt = "cl> "
@@ -51,7 +68,7 @@ func newModel(initialFilter string, entries []store.Entry) model {
 	ti.Focus()
 	ti.CursorEnd()
 
-	m := model{input: ti, all: entries}
+	m := model{input: ti, all: entries, styles: st}
 	m.refilter()
 
 	return m
@@ -143,9 +160,9 @@ func (m model) View() string {
 
 	for i := m.scroll; i < end; i++ {
 		entry := m.filtered[i]
-		line := fmt.Sprintf("%s  %s", entry.Name, commandStyle.Render(entry.Command))
+		line := fmt.Sprintf("%s  %s", entry.Name, m.styles.command.Render(entry.Command))
 		if i == m.cursor {
-			line = selectedStyle.Render("> " + line)
+			line = m.styles.selected.Render("> " + line)
 		} else {
 			line = "  " + line
 		}
@@ -154,11 +171,11 @@ func (m model) View() string {
 	}
 
 	if len(m.filtered) == 0 {
-		b.WriteString(helpStyle.Render("  no matching commands"))
+		b.WriteString(m.styles.help.Render("  no matching commands"))
 		b.WriteString("\n")
 	}
 
-	b.WriteString(helpStyle.Render("↑/↓ move · enter select · esc cancel"))
+	b.WriteString(m.styles.help.Render("↑/↓ move · enter select · esc cancel"))
 
 	return b.String()
 }
@@ -173,7 +190,8 @@ func Run(initialFilter string, entries []store.Entry) (string, error) {
 	}
 	defer cleanup()
 
-	m := newModel(initialFilter, entries)
+	renderer := lipgloss.NewRenderer(tty)
+	m := newModel(initialFilter, entries, newStyles(renderer))
 
 	p := tea.NewProgram(m, tea.WithInput(tty), tea.WithOutput(tty))
 
