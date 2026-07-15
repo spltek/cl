@@ -62,12 +62,25 @@ mkdir -p "$INSTALL_DIR"
 mv "$tmp_dir/cl" "$INSTALL_DIR/cl"
 chmod +x "$INSTALL_DIR/cl"
 
-# Downloads made via curl are not quarantined by macOS Gatekeeper (only
-# downloads attributed to a browser/Mail are), but clear the attribute
-# defensively in case it is ever present. No special privileges are
-# needed: this only touches an xattr on a file the current user owns.
-if [ "$os" = "Darwin" ] && command -v xattr >/dev/null 2>&1; then
-  xattr -d com.apple.quarantine "$INSTALL_DIR/cl" 2>/dev/null || true
+if [ "$os" = "Darwin" ]; then
+  # Downloads made via curl are not quarantined by macOS Gatekeeper
+  # (only downloads attributed to a browser/Mail are), but clear the
+  # attribute defensively in case it is ever present. No special
+  # privileges needed: this only touches an xattr on a file the
+  # current user owns.
+  if command -v xattr >/dev/null 2>&1; then
+    xattr -d com.apple.quarantine "$INSTALL_DIR/cl" 2>/dev/null || true
+  fi
+
+  # On Apple Silicon, the kernel validates a binary's code signature
+  # on every launch. Extracting the binary from the release archive
+  # can leave it with an invalid/stale signature, which makes the OS
+  # SIGKILL it on launch ("zsh: killed", exit code 137) even though
+  # the file itself is otherwise fine. Re-signing ad-hoc fixes this;
+  # again, no special privileges needed for signing your own file.
+  if command -v codesign >/dev/null 2>&1; then
+    codesign --sign - --force "$INSTALL_DIR/cl" 2>/dev/null || true
+  fi
 fi
 
 echo "Installed cl $tag to $INSTALL_DIR/cl"
