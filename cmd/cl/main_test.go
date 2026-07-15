@@ -34,8 +34,8 @@ func TestPrintExecuting_AnnouncesTheEntryName(t *testing.T) {
 	printExecuting(&buf, "build")
 
 	got := buf.String()
-	if !strings.Contains(got, "> Execute") {
-		t.Fatalf("printExecuting output = %q, want it to contain %q", got, "> Execute")
+	if !strings.Contains(got, "> Execute:") {
+		t.Fatalf("printExecuting output = %q, want it to contain %q", got, "> Execute:")
 	}
 	if !strings.Contains(got, "build") {
 		t.Fatalf("printExecuting output = %q, want it to contain the entry name %q", got, "build")

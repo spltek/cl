@@ -2,10 +2,10 @@
 // name -> shell command dictionary and lets you search it
 // interactively. Adding, editing, renaming and deleting commands all
 // happen inside the interactive picker itself
-// (ctrl+a/ctrl+e/ctrl+r/ctrl+d) - see printUsage below. Whether
-// picking a command shows its value and pre-fills it on the prompt,
-// or runs it directly without ever showing it, is controlled by the
-// picker's own ctrl+s toggle (store.Config.ShowCommand).
+// (ctrl+a/ctrl+e/ctrl+r/ctrl+d) - see printUsage below. Enter always
+// runs the picked command directly. Whether the list shows each
+// entry's command next to its name is controlled by the picker's
+// own ctrl+s toggle (store.Config.ShowCommand).
 package main
 
 import (
@@ -90,16 +90,10 @@ func runInteractive(filter string) error {
 		return nil
 	}
 
-	// cfg.ShowCommand (toggled in-picker with ctrl+s) decides what
-	// to do with the picked command: shown, it's printed to stdout
-	// for the shell integration to capture and pre-fill on the
-	// prompt (a second Enter runs it); hidden, its value was never
-	// shown, and cl runs it directly instead so it's never visible.
-	if cfg.ShowCommand() {
-		fmt.Println(entry.Command)
-		return nil
-	}
-
+	// ShowCommand (toggled in-picker with ctrl+s) only controls
+	// whether the command is displayed in the list. Enter always
+	// runs the picked command directly, with its output reaching
+	// the console exactly as if it had been typed there.
 	return runDirectly(entry)
 }
 
@@ -135,7 +129,7 @@ func runDirectly(entry store.Entry) error {
 // supports, the same way Bubble Tea itself does for the picker.
 func printExecuting(w io.Writer, name string) {
 	nameStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212"))
-	fmt.Fprintln(colorprofile.NewWriter(w, nil), "> Execute "+nameStyle.Render(name))
+	fmt.Fprintln(colorprofile.NewWriter(w, nil), "> Execute: "+nameStyle.Render(name))
 }
 
 // shellCommand returns the shell binary and arguments used to run

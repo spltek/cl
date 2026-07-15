@@ -3,12 +3,11 @@
 A tiny personal command manager. `cl` stores a `name -> shell command`
 dictionary in a JSON file and lets you search it interactively from
 your terminal. By default the command itself stays hidden — only
-names are shown — and picking one runs it immediately, without ever
-displaying its value. Toggle `Ctrl+S` in the picker to flip that: the
-command then shows next to its name, and picking it writes it onto
-your shell prompt instead (not run yet), so a second Enter executes
-it exactly as if you had typed it yourself. Either way, all output
-from a run command reaches your console normally.
+names are shown — so you can run it without ever seeing its value.
+Toggle `Ctrl+S` in the picker to also show each command under its
+name in the list (display-only — `Enter` always runs the command
+directly). All output from a run command reaches your console
+normally.
 
 ## How it works
 
@@ -74,9 +73,8 @@ Downloads the right binary for your OS/arch from the
 iwr https://raw.githubusercontent.com/silviopola/cl/main/install.ps1 | iex
 ```
 
-Installs into `%LOCALAPPDATA%\cl\bin` (override with `CL_INSTALL_DIR`),
-persists it on your **User**-scope `PATH`, and adds the integration
-line to your PowerShell profile (`$PROFILE`) automatically.
+Installs into `%LOCALAPPDATA%\cl\bin` (override with `CL_INSTALL_DIR`).
+Make sure this directory is on your `PATH` after installing.
 
 #### Special permissions?
 
@@ -87,14 +85,10 @@ are all plain per-user operations. The installer also clears the
 macOS quarantine flag defensively (harmless if absent, no `sudo`
 needed since it's your own file).
 
-The one real gotcha is Windows-specific: if your PowerShell execution
-policy resolves to `Restricted` or `AllSigned`, your `$PROFILE` script
-won't run at all (this predates and is unrelated to `cl`), so the
-added integration line would silently never execute. The installer
-detects this and prints a warning with the exact command to fix it
-(`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`) — it
-deliberately does not change this policy itself, since it's a
-security setting you should opt into consciously.
+If you are on Windows and your PowerShell execution policy resolves
+to `Restricted` or `AllSigned`, you may need to allow scripts to run
+with `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` before
+the install command above can execute.
 
 ### From source
 
@@ -193,7 +187,7 @@ enter run · esc cancel
 
 # Type the host and press Enter — the resolved command runs:
 
-> Execute ssh server
+> Execute: ssh server
 Last login: ...
 ```
 
@@ -264,7 +258,7 @@ esc cancel
 # press Enter on "build": cl announces the name (colored) before
 # running it, then the command's own output follows normally
 
-> Execute build
+> Execute: build
 ...(build output)...
 
 # press ctrl+s to show commands in the list (display-only —

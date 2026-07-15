@@ -1450,9 +1450,7 @@ func TestPlaceholder_ShowCommandTrueStillResolvesPlaceholders(t *testing.T) {
 	if !m.quitting {
 		t.Fatalf("quitting = false, want true")
 	}
-	// The caller will receive the resolved command regardless of
-	// showCommand - it decides whether to print it for the shell
-	// integration or run it directly.
+	// The caller always runs the resolved command directly.
 	if got, want := m.selected.Command, "ssh admin@prod.example.com"; got != want {
 		t.Fatalf("selected.Command = %q, want resolved command %q", got, want)
 	}

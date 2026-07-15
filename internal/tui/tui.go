@@ -1,8 +1,8 @@
 // Package tui implements the interactive command picker and all
 // in-picker management (add/edit/rename/delete). It renders on the
-// controlling terminal (not on stdout) so that the final selected
-// command can be captured cleanly via command substitution by the
-// calling shell integration.
+// controlling terminal (not on stdout) so that the picker can read
+// input and display output without interfering with the caller's
+// own stdout.
 package tui
 
 import (
@@ -320,10 +320,9 @@ func (m *model) startFillPlaceholders(e store.Entry, phs []placeholder) {
 }
 
 // toggleShowCommand flips and persists the showCommand setting,
-// which controls both whether the list shows each entry's command
-// next to its name and what Enter does with the highlighted entry
-// (hand it back to pre-fill the prompt vs. run it directly) - see
-// store.Config.
+// which controls whether the list shows each entry's command
+// next to its name. Enter always runs commands directly
+// regardless of this setting — see store.Config.
 func (m *model) toggleShowCommand() {
 	m.cfg.SetShowCommand(!m.cfg.ShowCommand())
 	if err := m.cfg.Save(); err != nil {
@@ -363,10 +362,8 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "enter":
-			// What the caller does with m.selected once Run returns
-			// - hand it back to the shell to pre-fill, or run it
-			// directly - depends on cfg.ShowCommand; it's the same
-			// either way from here.
+			// Enter always runs the command directly. The caller
+			// receives m.selected and executes it.
 			if len(m.filtered) > 0 {
 				entry := m.filtered[m.cursor]
 				phs := parsePlaceholders(entry.Command)
@@ -835,10 +832,7 @@ func (m model) viewFillPlaceholders() tea.View {
 // sub-flows persist to st immediately as they're confirmed,
 // independently of the final selection. cfg.ShowCommand (toggled
 // in-picker with ctrl+s, persisted immediately) controls whether the
-// list shows each entry's command next to its name; it's up to the
-// caller to decide what to do with the returned entry based on the
-// same setting - hand its command back to the shell to pre-fill, or
-// run it directly.
+// list shows each entry's command next to its name.
 func Run(initialFilter string, st *store.Store, cfg *store.Config) (store.Entry, error) {
 	ttyIn, ttyOut, err := tea.OpenTTY()
 	if err != nil {

@@ -18,14 +18,11 @@ type Config struct {
 // (ShowCommand: false) is also Config's default, so a missing file
 // behaves exactly like one with every setting left at its default.
 type configData struct {
-	// ShowCommand controls two things at once: whether the picker's
-	// list shows each entry's command next to its name, and what
-	// Enter does with the highlighted entry. When true, the command
-	// is shown in the list, and Enter hands it back to the shell
-	// integration to pre-fill on the prompt (a second Enter runs
-	// it). When false (the default), the list only shows names, and
-	// Enter runs the command immediately without ever displaying
-	// its value.
+	// ShowCommand controls whether the picker's list shows each
+	// entry's command next to its name. When true, the command is
+	// shown in the list. When false (the default), the list only
+	// shows names. Enter always runs the command directly
+	// regardless of this setting.
 	ShowCommand bool `json:"showCommand"`
 }
 
@@ -74,9 +71,8 @@ func (c *Config) Save() error {
 }
 
 // ShowCommand reports whether the picker should show each entry's
-// command next to its name, and hand it back for the shell
-// integration to pre-fill rather than run it directly. See
-// configData.ShowCommand.
+// command next to its name. Enter always runs the command directly
+// regardless of this setting. See configData.ShowCommand.
 func (c *Config) ShowCommand() bool {
 	return c.data.ShowCommand
 }
