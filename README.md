@@ -67,6 +67,16 @@ for a couple of informational flags.
 
 ## Install
 
+### Homebrew (macOS/Linux)
+
+```bash
+brew install silviopola/tap/cl
+```
+
+This installs `cl` itself; you still need to add the [shell
+integration](#shell-integration) line to your shell config yourself
+(Homebrew has no way to do that for you).
+
 ### From a release (macOS/Linux)
 
 ```bash
