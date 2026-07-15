@@ -1098,3 +1098,399 @@ func TestPaste_NewlinesInPastedFormValueAreCollapsedToSpaces(t *testing.T) {
 		t.Fatalf("form.Value() = %q, want %q", got, want)
 	}
 }
+
+// --- Placeholder flow ---
+
+// placeholderStore returns a store pre-populated with commands that
+// contain {{placeholder}} patterns.
+func placeholderStore(t *testing.T) *store.Store {
+	t.Helper()
+
+	t.Setenv("CL_CONFIG_DIR", t.TempDir())
+
+	s, err := store.Load()
+	if err != nil {
+		t.Fatalf("store.Load() error = %v", err)
+	}
+
+	s.Set("ssh", "ssh {{user}}@{{host}}")
+	s.Set("git push", "git push {{remote:origin}} {{branch:main}}")
+	s.Set("build", "npm run build")
+
+	return s
+}
+
+func TestPlaceholder_EnterOnCommandWithPlaceholdersEntersFillMode(t *testing.T) {
+	m := newModel("ssh", placeholderStore(t), testConfig(t), testStyles())
+
+	m, _ = update(m, key(tea.KeyEnter))
+
+	if m.mode != modeFillPlaceholders {
+		t.Fatalf("mode after Enter on command with placeholders = %v, want modeFillPlaceholders", m.mode)
+	}
+	if m.selected.Name != "ssh" {
+		t.Fatalf("selected.Name = %q, want %q", m.selected.Name, "ssh")
+	}
+	if len(m.placeholders) != 2 {
+		t.Fatalf("len(placeholders) = %d, want 2", len(m.placeholders))
+	}
+	if m.phIdx != 0 {
+		t.Fatalf("phIdx = %d, want 0 (first placeholder)", m.phIdx)
+	}
+}
+
+func TestPlaceholder_EnterOnCommandWithoutPlaceholdersBehavesNormally(t *testing.T) {
+	m := newModel("build", placeholderStore(t), testConfig(t), testStyles())
+
+	m, _ = update(m, key(tea.KeyEnter))
+
+	if !m.quitting {
+		t.Fatalf("quitting = false, want true after Enter on command without placeholders")
+	}
+	if m.selected.Name != "build" {
+		t.Fatalf("selected.Name = %q, want %q", m.selected.Name, "build")
+	}
+}
+
+func TestPlaceholder_FullFlowResolvesAndQuits(t *testing.T) {
+	m := newModel("ssh", placeholderStore(t), testConfig(t), testStyles())
+
+	// Enter the placeholder-filling flow.
+	m, _ = update(m, key(tea.KeyEnter))
+	if m.mode != modeFillPlaceholders {
+		t.Fatalf("mode = %v, want modeFillPlaceholders", m.mode)
+	}
+
+	// Fill the first placeholder ("user") - no default, so required.
+	m = typeString(m, "admin")
+	m, _ = update(m, key(tea.KeyEnter))
+	if m.phIdx != 1 {
+		t.Fatalf("phIdx after first Enter = %d, want 1 (second placeholder)", m.phIdx)
+	}
+	if m.phVals[0] != "admin" {
+		t.Fatalf("phVals[0] = %q, want %q", m.phVals[0], "admin")
+	}
+
+	// Fill the second placeholder ("host") - no default.
+	m = typeString(m, "prod.example.com")
+	m, _ = update(m, key(tea.KeyEnter))
+
+	if !m.quitting {
+		t.Fatalf("quitting = false, want true after filling all placeholders")
+	}
+	if got, want := m.selected.Command, "ssh admin@prod.example.com"; got != want {
+		t.Fatalf("selected.Command = %q, want %q", got, want)
+	}
+}
+
+func TestPlaceholder_DefaultsArePreFilled(t *testing.T) {
+	m := newModel("git push", placeholderStore(t), testConfig(t), testStyles())
+
+	m, _ = update(m, key(tea.KeyEnter))
+
+	// First placeholder "remote" has default "origin" - pre-filled.
+	if got, want := m.form.Value(), "origin"; got != want {
+		t.Fatalf("form.Value() for first placeholder = %q, want pre-filled default %q", got, want)
+	}
+	if m.phVals[0] != "origin" {
+		t.Fatalf("phVals[0] = %q, want default %q", m.phVals[0], "origin")
+	}
+
+	// Accept the default and move to the next.
+	m, _ = update(m, key(tea.KeyEnter))
+
+	if m.pendingErr != "" {
+		t.Fatalf("pendingErr = %q after accepting non-empty default, want empty", m.pendingErr)
+	}
+	if m.phIdx != 1 {
+		t.Fatalf("phIdx = %d, want 1", m.phIdx)
+	}
+}
+
+func TestPlaceholder_AcceptAllDefaultsProducesCorrectCommand(t *testing.T) {
+	m := newModel("git push", placeholderStore(t), testConfig(t), testStyles())
+
+	m, _ = update(m, key(tea.KeyEnter))
+	// Accept default "origin" for remote.
+	m, _ = update(m, key(tea.KeyEnter))
+	// Accept default "main" for branch.
+	m, _ = update(m, key(tea.KeyEnter))
+
+	if !m.quitting {
+		t.Fatalf("quitting = false, want true")
+	}
+	if got, want := m.selected.Command, "git push origin main"; got != want {
+		t.Fatalf("selected.Command = %q, want %q", got, want)
+	}
+}
+
+func TestPlaceholder_OverrideDefault(t *testing.T) {
+	m := newModel("git push", placeholderStore(t), testConfig(t), testStyles())
+
+	m, _ = update(m, key(tea.KeyEnter))
+
+	// Override the pre-filled "origin" with "upstream".
+	for range "origin" {
+		m, _ = update(m, key(tea.KeyBackspace))
+	}
+	m = typeString(m, "upstream")
+	m, _ = update(m, key(tea.KeyEnter))
+
+	// Accept default "main" for branch.
+	m, _ = update(m, key(tea.KeyEnter))
+
+	if got, want := m.selected.Command, "git push upstream main"; got != want {
+		t.Fatalf("selected.Command = %q, want %q", got, want)
+	}
+}
+
+func TestPlaceholder_EmptyValueRejectedWhenNoDefault(t *testing.T) {
+	m := newModel("ssh", placeholderStore(t), testConfig(t), testStyles())
+
+	m, _ = update(m, key(tea.KeyEnter))
+
+	// First placeholder "user" has no default - submit empty.
+	m, _ = update(m, key(tea.KeyEnter))
+
+	if m.mode != modeFillPlaceholders {
+		t.Fatalf("mode = %v, want modeFillPlaceholders to stay after empty required value", m.mode)
+	}
+	if m.pendingErr == "" {
+		t.Fatalf("pendingErr = empty, want a non-empty validation message")
+	}
+	// Should still be on index 0.
+	if m.phIdx != 0 {
+		t.Fatalf("phIdx = %d, want 0 (did not advance)", m.phIdx)
+	}
+}
+
+func TestPlaceholder_EscReturnsToList(t *testing.T) {
+	m := newModel("ssh", placeholderStore(t), testConfig(t), testStyles())
+
+	m, _ = update(m, key(tea.KeyEnter))
+	if m.mode != modeFillPlaceholders {
+		t.Fatalf("mode = %v, want modeFillPlaceholders", m.mode)
+	}
+
+	// Type some value then Esc.
+	m = typeString(m, "admin")
+	m, _ = update(m, key(tea.KeyEsc))
+
+	if m.mode != modeList {
+		t.Fatalf("mode after Esc = %v, want modeList", m.mode)
+	}
+	if m.quitting {
+		t.Fatalf("quitting = true, want false after cancel")
+	}
+	if m.selected.Command != "" {
+		t.Fatalf("selected.Command = %q, want empty after cancel", m.selected.Command)
+	}
+}
+
+func TestPlaceholder_ViewShowsPreviewWithResolvedPlaceholders(t *testing.T) {
+	m := newModel("ssh", placeholderStore(t), testConfig(t), testStyles())
+
+	m, _ = update(m, key(tea.KeyEnter))
+
+	// Type a value to see it in the preview.
+	m = typeString(m, "admin")
+
+	view := m.View().Content
+	if !strings.Contains(view, "admin") {
+		t.Fatalf("View() = %q, want the preview to show the typed value %q", view, "admin")
+	}
+	if strings.Contains(view, "{{user}}") {
+		t.Fatalf("View() = %q, want the current placeholder replaced by typed text in the preview", view)
+	}
+	// The second placeholder should still appear.
+	if !strings.Contains(view, "{{host}}") {
+		t.Fatalf("View() = %q, want remaining placeholder %q to still appear", view, "{{host}}")
+	}
+	// Help text for non-last placeholder.
+	if !strings.Contains(view, "continue") {
+		t.Fatalf("View() = %q, want 'enter continue' for non-last placeholder", view)
+	}
+}
+
+func TestPlaceholder_ViewLastPlaceholderShowsRunHelp(t *testing.T) {
+	// Single placeholder: it's also the last one.
+	st := placeholderStore(t)
+	st.Set("greet", "echo hello {{name}}")
+	m := newModel("greet", st, testConfig(t), testStyles())
+
+	m, _ = update(m, key(tea.KeyEnter))
+
+	view := m.View().Content
+	if !strings.Contains(view, "enter run") {
+		t.Fatalf("View() = %q, want 'enter run' for the last placeholder", view)
+	}
+	if strings.Contains(view, "continue") {
+		t.Fatalf("View() = %q, want 'run' not 'continue' for the last placeholder", view)
+	}
+}
+
+func TestPlaceholder_ViewPreviewFollowsLiveTypingOverDefault(t *testing.T) {
+	m := newModel("git push", placeholderStore(t), testConfig(t), testStyles())
+
+	m, _ = update(m, key(tea.KeyEnter))
+	// Prefill is "origin"; override by typing (after clearing).
+	for range "origin" {
+		m, _ = update(m, key(tea.KeyBackspace))
+	}
+	m = typeString(m, "upstream")
+
+	view := m.View().Content
+	if !strings.Contains(view, "upstream") {
+		t.Fatalf("View() = %q, want live typed text %q in the preview", view, "upstream")
+	}
+	// The current field's stale default must not linger in the preview.
+	if strings.Contains(view, "git push origin ") {
+		t.Fatalf("View() = %q, want the prefilled default replaced by live typing", view)
+	}
+}
+
+func TestPlaceholder_DefaultWithSpecialChars(t *testing.T) {
+	st := placeholderStore(t)
+	st.Set("connect", "psql -h {{host:localhost}} -p {{port:5432}} -U {{user}}")
+	m := newModel("connect", st, testConfig(t), testStyles())
+
+	m, _ = update(m, key(tea.KeyEnter))
+
+	// First placeholder "host" has default "localhost".
+	if m.phVals[0] != "localhost" {
+		t.Fatalf("phVals[0] = %q, want %q", m.phVals[0], "localhost")
+	}
+
+	// Accept default, move to "port".
+	m, _ = update(m, key(tea.KeyEnter))
+	// Accept default "5432", move to "user".
+	m, _ = update(m, key(tea.KeyEnter))
+	// Fill required "user".
+	m = typeString(m, "postgres")
+	m, _ = update(m, key(tea.KeyEnter))
+
+	if got, want := m.selected.Command, "psql -h localhost -p 5432 -U postgres"; got != want {
+		t.Fatalf("selected.Command = %q, want %q", got, want)
+	}
+}
+
+func TestPlaceholder_SinglePlaceholderEntireCommand(t *testing.T) {
+	st := placeholderStore(t)
+	st.Set("greet", "{{msg}}")
+	m := newModel("greet", st, testConfig(t), testStyles())
+
+	m, _ = update(m, key(tea.KeyEnter))
+
+	if m.mode != modeFillPlaceholders {
+		t.Fatalf("mode = %v, want modeFillPlaceholders", m.mode)
+	}
+	if len(m.placeholders) != 1 {
+		t.Fatalf("len(placeholders) = %d, want 1", len(m.placeholders))
+	}
+
+	// Fill and execute.
+	m = typeString(m, "hello world")
+	m, _ = update(m, key(tea.KeyEnter))
+
+	if !m.quitting {
+		t.Fatalf("quitting = false, want true")
+	}
+	if got, want := m.selected.Command, "hello world"; got != want {
+		t.Fatalf("selected.Command = %q, want %q", got, want)
+	}
+}
+
+func TestPlaceholder_DefaultWithBackslashesAndColons(t *testing.T) {
+	st := placeholderStore(t)
+	st.Set("docker", "docker run -v {{src:/host/path:ro}}:{{dest:/container/path}} {{image}}")
+	m := newModel("docker", st, testConfig(t), testStyles())
+
+	m, _ = update(m, key(tea.KeyEnter))
+
+	if m.phVals[0] != "/host/path:ro" {
+		t.Fatalf("phVals[0] = %q, want %q", m.phVals[0], "/host/path:ro")
+	}
+
+	// Accept default for src.
+	m, _ = update(m, key(tea.KeyEnter))
+
+	if m.phVals[1] != "/container/path" {
+		t.Fatalf("phVals[1] = %q, want %q", m.phVals[1], "/container/path")
+	}
+
+	// Accept default for dest.
+	m, _ = update(m, key(tea.KeyEnter))
+	// Fill required image.
+	m = typeString(m, "node:18")
+	m, _ = update(m, key(tea.KeyEnter))
+
+	if got, want := m.selected.Command, "docker run -v /host/path:ro:/container/path node:18"; got != want {
+		t.Fatalf("selected.Command = %q, want %q", got, want)
+	}
+}
+
+func TestPlaceholder_ShowCommandTrueStillResolvesPlaceholders(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.SetShowCommand(true)
+
+	st := placeholderStore(t)
+	m := newModel("ssh", st, cfg, testStyles())
+
+	m, _ = update(m, key(tea.KeyEnter))
+	if m.mode != modeFillPlaceholders {
+		t.Fatalf("mode = %v, want modeFillPlaceholders even when showCommand is true", m.mode)
+	}
+
+	// Fill both placeholders.
+	m = typeString(m, "admin")
+	m, _ = update(m, key(tea.KeyEnter))
+	m = typeString(m, "prod.example.com")
+	m, _ = update(m, key(tea.KeyEnter))
+
+	if !m.quitting {
+		t.Fatalf("quitting = false, want true")
+	}
+	// The caller will receive the resolved command regardless of
+	// showCommand - it decides whether to print it for the shell
+	// integration or run it directly.
+	if got, want := m.selected.Command, "ssh admin@prod.example.com"; got != want {
+		t.Fatalf("selected.Command = %q, want resolved command %q", got, want)
+	}
+}
+
+func TestPlaceholder_PasteInPlaceholderForm(t *testing.T) {
+	st := placeholderStore(t)
+	m := newModel("ssh", st, testConfig(t), testStyles())
+
+	m, _ = update(m, key(tea.KeyEnter))
+
+	// Paste with embedded newline into the placeholder form.
+	m, _ = update(m, tea.PasteMsg{Content: "ad\nmin"})
+
+	if got, want := m.form.Value(), "ad min"; got != want {
+		t.Fatalf("form.Value() after paste = %q, want newlines collapsed to spaces %q", got, want)
+	}
+}
+
+func TestPlaceholder_BackspaceInPlaceholderForm(t *testing.T) {
+	st := placeholderStore(t)
+	st.Set("git push", "git push {{remote:origin}} {{branch:main}}")
+	m := newModel("git push", st, testConfig(t), testStyles())
+
+	m, _ = update(m, key(tea.KeyEnter))
+
+	// Default is "origin" - backspace to clear, then type new value.
+	for range "origin" {
+		m, _ = update(m, key(tea.KeyBackspace))
+	}
+	m = typeString(m, "upstream")
+
+	if got, want := m.form.Value(), "upstream"; got != want {
+		t.Fatalf("form.Value() = %q, want %q", got, want)
+	}
+
+	m, _ = update(m, key(tea.KeyEnter))
+	if m.phVals[0] != "upstream" {
+		t.Fatalf("phVals[0] = %q, want %q", m.phVals[0], "upstream")
+	}
+}

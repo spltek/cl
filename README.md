@@ -21,16 +21,9 @@ separate "add"/"remove" subcommand to remember:
   scattered anywhere in the name), use the arrow keys to move,
   `Enter` to pick, `Esc`/`Ctrl-C` to cancel.
 - `Ctrl+S` toggles whether the list shows each command next to its
-  name (persisted immediately, so it's remembered next time). This
-  also changes what `Enter` does with the highlighted command:
-    - **Hidden (the default):** the list only shows names; `Enter`
-      runs the command directly — you never see its value, but
-      `cl` announces `> Execute <name>` (the name in color) right
-      before running it, and its own output still prints to your
-      terminal normally.
-    - **Shown:** the list shows `name  command`; `Enter` hands the
-      command back to the shell integration to pre-fill on your
-      prompt instead, editable, with a second `Enter` to run it.
+  name (persisted immediately, so it's remembered next time).
+  **Enter always runs the command directly** — the toggle only
+  affects what you see in the list, never what Enter does.
 - `Ctrl+A` adds a new command: it first asks for a name (spaces are
   allowed — there's no CLI token boundary to worry about anymore),
   then, on `Enter`, asks for the shell command itself and saves it
@@ -48,22 +41,14 @@ separate "add"/"remove" subcommand to remember:
   command is rejected in place with an inline message.
 - `Ctrl+D` deletes the highlighted command, after a `y`/`N`
   confirmation.
+- A command can contain **placeholders** with the `{{name}}` or
+  `{{name:default}}` syntax. When you pick such a command, `cl`
+  prompts you to fill each placeholder before running it — see
+  [Placeholders](#placeholders) below.
 - Commands are persisted as JSON in your user config directory
   (`~/Library/Application Support/cl` on macOS, `~/.config/cl` on
   Linux, `%AppData%\cl` on Windows) — written to disk immediately as
-  each add/edit/remove is confirmed, not just when you quit.
-
-When a command is shown (`Ctrl+S`), picking it from a plain binary
-invocation can't, by itself, write into your shell's input line — a
-child process has no way to reach into its parent shell's editing
-buffer. That's why `cl` also ships shell integration: a small `cl`
-**function** that shadows the `cl` binary on your `PATH`, calls the
-real binary, and then hands the result back to the shell using
-whatever native mechanism is available (see below). This is the same
-pattern tools like `zoxide` or `navi` use. When a command is hidden
-(the default), `cl` runs it itself and there's nothing left to hand
-back — the shell integration is only needed for the "show" mode and
-for a couple of informational flags.
+  each add/edit/remove is confirmed, not just when quit.
 
 ## Install
 
@@ -73,10 +58,6 @@ for a couple of informational flags.
 brew install silviopola/tap/cl
 ```
 
-This installs `cl` itself; you still need to add the [shell
-integration](#shell-integration) line to your shell config yourself
-(Homebrew has no way to do that for you).
-
 ### From a release (macOS/Linux)
 
 ```bash
@@ -85,12 +66,7 @@ curl -fsSL https://raw.githubusercontent.com/silviopola/cl/main/install.sh | sh
 
 Downloads the right binary for your OS/arch from the
 [latest release](https://github.com/silviopola/cl/releases) into
-`~/.local/bin` (override with `CL_INSTALL_DIR`), and **automatically
-wires up shell integration** for every shell it finds on the system
-(`~/.zshrc`, `~/.bashrc`, and `~/.bash_profile` if present) — open a
-new terminal afterwards and `cl` works immediately, no manual editing
-needed. Re-running the installer is safe; it never adds the same line
-twice.
+`~/.local/bin` (override with `CL_INSTALL_DIR`).
 
 ### From a release (Windows)
 
@@ -125,12 +101,15 @@ security setting you should opt into consciously.
 Requires Go 1.21+:
 
 ```bash
-make build   # -> bin/cl
+make install-local
 ```
 
-Put the resulting `bin/cl` binary somewhere on your `PATH` (e.g.
-`~/.local/bin` or `/usr/local/bin`), or run `make install` to install
-it into `$GOPATH/bin`/`$GOBIN` via `go install`.
+Builds the binary and installs it to `~/.local/bin/cl`.
+At the end it prints the one command you need to
+start using `cl` in the current shell without restarting it.
+
+> If you prefer to manage the binary yourself, `make build` compiles
+> into `bin/cl` and `make install` puts it into `$GOPATH/bin`.
 
 ### Releasing (maintainers)
 
@@ -161,45 +140,90 @@ make run ARGS="foo"  # build then run with the given args
 make clean        # remove bin/ and dist/
 ```
 
-## Shell integration
+## Placeholders
 
-### Zsh
+Commands can contain `{{name}}` or `{{name:default}}` placeholders.
+When you pick such a command, `cl` prompts you to fill each
+placeholder in sequence before running the resolved command.
 
-Add to `~/.zshrc`:
+### Syntax
 
-```zsh
-eval "$(cl init zsh)"
+```
+{{name}}              required placeholder — must be filled in
+{{name:default}}      optional placeholder — pre-filled with default,
+                      press Enter to accept it as-is
 ```
 
-Uses `print -z` to push the picked command into the *next* prompt's
-editing buffer — the exact two-step "write, then Enter to run" flow,
-no compromises.
+Placeholder names can contain letters, digits and underscores
+(`\w+`). The default value can be any text that does not contain
+`}}`.
 
-### Bash
+### Example
 
-Add to `~/.bashrc`:
+Add a command with a placeholder:
 
-```bash
-eval "$(cl init bash)"
+```
+ctrl+a → name: "ssh server" → command: ssh {{user}}@{{host}}
 ```
 
-Bash has no exact equivalent of `print -z` for a plain typed command
-(the `READLINE_LINE` trick only works inside an active key binding),
-so the integration shows the picked command as an editable pre-filled
-line via `read -e -i` right after you pick it — functionally the same
-experience, implemented differently under the hood.
+Now pick it:
 
-### PowerShell
+```
+$ cl ssh
+cl> ssh
+> ssh server
 
-Add to your profile (`$PROFILE`):
+↑/↓ move  enter run selected  ...
 
-```powershell
-Invoke-Expression (cl init powershell | Out-String)
+# Press Enter — cl detects the {{placeholders}} and prompts:
+
+ssh {{user}}@{{host}}
+
+user:
+_
+enter continue · esc cancel
+
+# Type a value, press Enter:
+
+ssh admin@{{host}}
+
+host:
+_
+enter run · esc cancel
+
+# Type the host and press Enter — the resolved command runs:
+
+> Execute ssh server
+Last login: ...
 ```
 
-Tries `[Microsoft.PowerShell.PSConsoleReadLine]::Insert()` (the same
-mechanism used by modules like PSFzf); if that's unavailable it falls
-back to an explicit `Run: <command>? [Y/n]` confirmation.
+With defaults:
+
+```
+ctrl+a → name: "git push" → command: git push {{remote:origin}} {{branch:main}}
+```
+
+Picking it pre-fills "origin" for `remote` and "main" for `branch`
+— press Enter through both to accept the defaults, or type over them.
+
+### In practice
+
+```
+# Database connections
+psql -h {{host:localhost}} -p {{port:5432}} -U {{user}} -d {{db:postgres}}
+
+# SSH with numbered hosts
+ssh {{user}}@prod-{{num:1}}.example.com
+
+# Docker with configurable ports
+ocker run -p {{port:3000}}:3000 {{image:node:18}}
+
+# Kubernetes with namespace
+kubectl logs {{pod}} -n {{namespace:default}}
+```
+
+Placeholders work regardless of whether commands are shown or hidden
+in the list. `cl` always resolves them and runs the command directly.
 
 ## Example
 
@@ -243,12 +267,13 @@ esc cancel
 > Execute build
 ...(build output)...
 
-# press ctrl+s to show commands instead - Enter now pre-fills your
-# prompt for a second Enter to run, rather than running immediately:
+# press ctrl+s to show commands in the list (display-only —
+# Enter always runs the command directly):
 
 $ cl bui
 cl> bui
-> build  npm run build -- --watch
+> build
+  npm run build -- --watch
 
 ↑/↓ move
 enter run selected
@@ -258,7 +283,19 @@ ctrl+r rename selected
 ctrl+d delete selected
 ctrl+s command show toggle
 esc cancel
-# Enter picks it, it appears on your prompt, Enter again runs it
+# The command is visible below its name so you know what you're
+# about to run. Enter always executes it directly.
+
+# Long commands wrap:
+
+$ cl
+cl> deploy
+> deploy
+  kubectl apply -f production/overlays/us-east-1/kustomization.yaml
+  --prune --selector app=api
+
+↑/↓ move  enter run selected  ...
+esc cancel
 
 # press ctrl+e on "build" to edit it in place:
 

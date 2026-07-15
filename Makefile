@@ -2,7 +2,9 @@ BINARY_NAME := cl
 BIN_DIR     := bin
 CMD_PATH    := ./cmd/cl
 
-.PHONY: help build test test-verbose cover vet fmt fmt-check clean install run
+.PHONY: help build test test-verbose cover vet fmt fmt-check clean install install-local run
+
+INSTALL_DIR ?= $(HOME)/.local/bin
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -49,6 +51,14 @@ clean: ## Remove build artifacts
 
 install: build ## Install the binary into $GOPATH/bin (or GOBIN)
 	go install $(CMD_PATH)
+
+install-local: build ## Build, install to ~/.local/bin, and codesign on macOS
+	@mkdir -p $(INSTALL_DIR)
+	@cp $(BIN_DIR)/$(BINARY_NAME) $(INSTALL_DIR)/$(BINARY_NAME)
+	@if command -v codesign >/dev/null 2>&1; then \
+		codesign --sign - --force $(INSTALL_DIR)/$(BINARY_NAME); \
+	fi
+	@echo "Installed to $(INSTALL_DIR)/$(BINARY_NAME)"
 
 run: build ## Build then run the binary, forwarding extra args (make run ARGS="foo")
 	./$(BIN_DIR)/$(BINARY_NAME) $(ARGS)

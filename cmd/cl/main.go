@@ -21,7 +21,6 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
 
-	"github.com/silvio/cl/internal/shellintegration"
 	"github.com/silvio/cl/internal/store"
 	"github.com/silvio/cl/internal/tui"
 )
@@ -56,10 +55,11 @@ func run(args []string) error {
 		return nil
 
 	case "init":
-		if len(args) < 2 {
-			return fmt.Errorf("usage: cl init <%s>", strings.Join(shellintegration.Supported(), "|"))
-		}
-		return runInit(args[1])
+		// Shell integration is no longer needed (Enter always runs
+		// commands directly regardless of Ctrl+S). Kept as a silent
+		// no-op so existing eval "$(cl init ...)" lines in shell rc
+		// files don't cause errors or open the picker.
+		return nil
 
 	case "-h", "--help", "help":
 		printUsage()
@@ -68,16 +68,6 @@ func run(args []string) error {
 	default:
 		return runInteractive(strings.Join(args, " "))
 	}
-}
-
-func runInit(shell string) error {
-	script, err := shellintegration.Script(shell)
-	if err != nil {
-		return err
-	}
-
-	fmt.Print(script)
-	return nil
 }
 
 func runInteractive(filter string) error {
@@ -115,12 +105,10 @@ func runInteractive(filter string) error {
 
 // runDirectly executes entry's command through the user's shell
 // with its stdin/stdout/stderr connected straight to the
-// controlling terminal - not to cl's own stdout, which the shell
-// integration captures via command substitution - so its output
-// reaches the console exactly as if it had been typed and run there
-// directly. Since the command's value is never shown in this mode,
-// it first announces the entry's name so there's still some
-// feedback about what's about to run.
+// controlling terminal so its output reaches the console exactly as
+// if it had been typed and run there directly. Before running it,
+// it announces the entry's name so there's still some feedback
+// about what's about to run.
 func runDirectly(entry store.Entry) error {
 	ttyIn, ttyOut, err := tea.OpenTTY()
 	if err != nil {
@@ -176,7 +164,6 @@ func printUsage() {
 Usage:
   cl                  Open the interactive picker
   cl <filter>           Open the picker pre-filtered by <filter>
-  cl init <shell>        Print shell integration snippet (zsh, bash, powershell)
 
 Inside the picker:
   ctrl+a   add a new command (asks for a name, then the shell command)
@@ -184,7 +171,6 @@ Inside the picker:
   ctrl+r   rename the highlighted command
   ctrl+d   delete the highlighted command
   ctrl+s   toggle showing each command next to its name in the list
-  enter    if commands are shown: pick the highlighted command, to
-           run on a second Enter; if hidden: run it directly
+  enter    run the highlighted command
   esc      cancel`)
 }

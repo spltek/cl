@@ -123,6 +123,7 @@ const (
 	modeConfirmSaveEdit
 	modeConfirmRename
 	modeConfirmDelete
+	modeFillPlaceholders
 )
 
 type model struct {
@@ -150,13 +151,18 @@ type model struct {
 
 	// form is the single-line input reused by every add/edit
 	// sub-flow (name entry, then command entry, then editing an
-	// existing command).
+	// existing command) and by the placeholder-filling flow.
 	form textarea.Model
 
 	pendingName  string // name captured by modeAddName/modeRenameName, staged until modeAddValue/modeConfirmRename commits it
 	pendingValue string // command captured by modeEditValue, staged until modeConfirmSaveEdit commits it
 	pendingErr   string // inline validation/save error shown next to the active form
 	target       store.Entry
+
+	// placeholder-filling state (modeFillPlaceholders).
+	placeholders []placeholder // parsed from the selected command
+	phIdx        int            // which placeholder is currently being filled
+	phVals       []string       // values entered so far (index-aligned with placeholders)
 }
 
 func newModel(initialFilter string, st *store.Store, cfg *store.Config, sty styles) model {
@@ -263,6 +269,7 @@ func (m *model) cancelForm() {
 	m.pendingName = ""
 	m.pendingValue = ""
 	m.pendingErr = ""
+	m.selected = store.Entry{}
 }
 
 func (m *model) startAdd() {
@@ -294,6 +301,24 @@ func (m *model) startDelete(e store.Entry) {
 	m.target = e
 }
 
+// startFillPlaceholders enters the placeholder-filling flow for the
+// selected entry. It parses placeholders from the command and
+// pre-fills each value with its default (if any).
+func (m *model) startFillPlaceholders(e store.Entry, phs []placeholder) {
+	m.mode = modeFillPlaceholders
+	m.selected = e
+	m.placeholders = phs
+	m.phIdx = 0
+	m.phVals = make([]string, len(phs))
+	for i, ph := range phs {
+		m.phVals[i] = ph.Default
+	}
+	m.pendingErr = ""
+	m.setForm(newTextArea("> ", "value"))
+	m.form.SetValue(m.phVals[0])
+	m.form.CursorEnd()
+}
+
 // toggleShowCommand flips and persists the showCommand setting,
 // which controls both whether the list shows each entry's command
 // next to its name and what Enter does with the highlighted entry
@@ -323,6 +348,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateForm(msg)
 	case modeConfirmSaveEdit, modeConfirmRename, modeConfirmDelete:
 		return m.updateConfirm(msg)
+	case modeFillPlaceholders:
+		return m.updateFillPlaceholders(msg)
 	default:
 		return m.updateList(msg)
 	}
@@ -341,7 +368,13 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// directly - depends on cfg.ShowCommand; it's the same
 			// either way from here.
 			if len(m.filtered) > 0 {
-				m.selected = m.filtered[m.cursor]
+				entry := m.filtered[m.cursor]
+				phs := parsePlaceholders(entry.Command)
+				if len(phs) > 0 {
+					m.startFillPlaceholders(entry, phs)
+					return m, nil
+				}
+				m.selected = entry
 			}
 			m.quitting = true
 			return m, tea.Quit
@@ -497,6 +530,54 @@ func (m model) submitForm() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// updateFillPlaceholders drives modeFillPlaceholders: a single-line
+// input for the current placeholder. Enter validates and advances to
+// the next placeholder (or resolves and quits when all are filled);
+// Esc cancels back to the list without running the command.
+func (m model) updateFillPlaceholders(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
+		switch keyMsg.String() {
+		case "esc":
+			m.cancelForm()
+			return m, nil
+
+		case "enter":
+			val := strings.TrimSpace(m.form.Value())
+			// If the placeholder has no default and the value is
+			// empty, reject and keep the user on the same field.
+			if val == "" && m.placeholders[m.phIdx].Default == "" {
+				m.pendingErr = "value required"
+				return m, nil
+			}
+			m.phVals[m.phIdx] = val
+			m.pendingErr = ""
+
+			m.phIdx++
+			if m.phIdx >= len(m.placeholders) {
+				// All placeholders filled: resolve and quit.
+				m.selected.Command = resolveCommand(m.selected.Command, m.placeholders, m.phVals)
+				m.quitting = true
+				return m, tea.Quit
+			}
+
+			// Advance to the next placeholder.
+			m.setForm(newTextArea("> ", "value"))
+			m.form.SetValue(m.phVals[m.phIdx])
+			m.form.CursorEnd()
+			return m, nil
+		}
+	}
+
+	if pasteMsg, ok := msg.(tea.PasteMsg); ok {
+		m.form.InsertString(sanitizePaste(pasteMsg.Content))
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	m.form, cmd = m.form.Update(msg)
+	return m, cmd
+}
+
 // updateConfirm drives the yes/no confirmation screens for saving an
 // edit, for renaming, and for deleting an entry.
 func (m model) updateConfirm(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -555,6 +636,8 @@ func (m model) View() tea.View {
 		return tea.NewView(m.viewConfirm(fmt.Sprintf("Rename %q -> %q ?", m.target.Name, m.pendingName)))
 	case modeConfirmDelete:
 		return tea.NewView(m.viewConfirm(fmt.Sprintf("Delete %q (%s) ?", m.target.Name, m.target.Command)))
+	case modeFillPlaceholders:
+		return m.viewFillPlaceholders()
 	default:
 		return m.viewList()
 	}
@@ -573,17 +656,46 @@ func (m model) viewList() tea.View {
 
 	for i := m.scroll; i < end; i++ {
 		entry := m.filtered[i]
-		line := entry.Name
-		if m.cfg.ShowCommand() {
-			line = fmt.Sprintf("%s  %s", entry.Name, m.styles.command.Render(entry.Command))
-		}
+
+		prefix := "  "
 		if i == m.cursor {
-			line = m.styles.selected.Render("> " + line)
-		} else {
-			line = "  " + line
+			prefix = "> "
 		}
-		b.WriteString(line)
+
+		// Name line.
+		name := entry.Name
+		if i == m.cursor {
+			name = m.styles.selected.Render(name)
+		}
+		b.WriteString(prefix + name)
 		b.WriteString("\n")
+
+		// Command line(s), indented under the name and word-wrapped.
+		// The indent always uses spaces (never ">") so continuation
+		// lines align under the command, not under the cursor arrow.
+		if m.cfg.ShowCommand() {
+			cmdIndent := strings.Repeat(" ", lipgloss.Width(prefix))
+			cmdText := m.styles.command.Render(entry.Command)
+			if m.width > 0 {
+				wrapWidth := m.width - lipgloss.Width(cmdIndent)
+				if wrapWidth < 10 {
+					wrapWidth = 10
+				}
+				wrapped := lipgloss.NewStyle().Width(wrapWidth).Render(cmdText)
+				for _, wl := range strings.Split(wrapped, "\n") {
+					b.WriteString(cmdIndent + wl)
+					b.WriteString("\n")
+				}
+			} else {
+				b.WriteString(cmdIndent + cmdText)
+				b.WriteString("\n")
+			}
+		}
+
+		// Extra spacing between multi-line entries (showCommand on).
+		if m.cfg.ShowCommand() {
+			b.WriteString("\n")
+		}
 	}
 
 	if len(m.filtered) == 0 {
@@ -669,6 +781,52 @@ func (m model) viewConfirm(prompt string) string {
 	b.WriteString(m.wrapStyled(m.styles.help, "y confirm · n/esc cancel"))
 
 	return b.String()
+}
+
+// viewFillPlaceholders renders the placeholder-filling screen: a
+// preview of the command with resolved placeholders on top, the
+// current placeholder's input form in the middle, and help at the
+// bottom.
+func (m model) viewFillPlaceholders() tea.View {
+	var b strings.Builder
+
+	// Preview line: the command with filled placeholders replaced.
+	ph := m.placeholders[m.phIdx]
+	currentText := m.form.Value()
+	preview := buildPreview(m.selected.Command, m.placeholders, m.phVals, m.phIdx, currentText)
+	previewView := m.wrapStyled(m.styles.command, preview)
+	b.WriteString(previewView)
+	b.WriteString("\n\n")
+
+	// Form label: the placeholder name.
+	labelView := m.wrap(ph.Name + ":")
+	b.WriteString(labelView)
+	b.WriteString("\n")
+	b.WriteString(m.form.View())
+	b.WriteString("\n")
+
+	if m.pendingErr != "" {
+		b.WriteString(m.wrapStyled(m.styles.errMsg, m.pendingErr))
+		b.WriteString("\n")
+	}
+
+	// Help text adapts to whether this is the last placeholder.
+	var help string
+	if m.phIdx == len(m.placeholders)-1 {
+		help = "enter run · esc cancel"
+	} else {
+		help = "enter continue · esc cancel"
+	}
+	b.WriteString(m.wrapStyled(m.styles.help, help))
+
+	// Cursor sits on the form, below the same preview/label rows we
+	// just rendered (use those exact strings so wrap height matches).
+	v := tea.NewView(b.String())
+	if cur := m.form.Cursor(); cur != nil {
+		cur.Position.Y += lipgloss.Height(previewView) + 1 + lipgloss.Height(labelView)
+		v.Cursor = cur
+	}
+	return v
 }
 
 // Run displays the interactive picker seeded with initialFilter and

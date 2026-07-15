@@ -13,24 +13,6 @@ func withTempConfigDir(t *testing.T) {
 	t.Setenv("CL_CONFIG_DIR", t.TempDir())
 }
 
-func TestRun_UsageErrorsOnMissingArgs(t *testing.T) {
-	if err := run([]string{"init"}); err == nil {
-		t.Errorf("run(init) with no shell arg error = nil, want usage error")
-	}
-}
-
-func TestRun_InitPrintsScriptForKnownShell(t *testing.T) {
-	if err := run([]string{"init", "zsh"}); err != nil {
-		t.Fatalf("run(init zsh) error = %v", err)
-	}
-}
-
-func TestRun_InitFailsForUnknownShell(t *testing.T) {
-	if err := run([]string{"init", "fish"}); err == nil {
-		t.Fatalf("run(init fish) error = nil, want error")
-	}
-}
-
 func TestRun_VersionFlagsSucceed(t *testing.T) {
 	for _, args := range [][]string{{"-v"}, {"--version"}} {
 		if err := run(args); err != nil {

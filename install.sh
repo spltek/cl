@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-# Installs the latest (or a specific) cl release for macOS/Linux, and
-# wires up shell integration so a brand-new terminal works right away
-# (no manual editing of ~/.zshrc / ~/.bashrc required).
+# Installs the latest (or a specific) cl release for macOS/Linux.
 #
 # Usage:
 #   curl -fsSL https://raw.githubusercontent.com/silviopola/cl/main/install.sh | sh
@@ -84,55 +82,5 @@ if [ "$os" = "Darwin" ]; then
 fi
 
 echo "Installed cl $tag to $INSTALL_DIR/cl"
-
-# ensure_line appends $2 to file $1 (creating it if needed) under a
-# marker comment, unless that exact line is already present. Plain
-# $HOME dotfiles are always user-writable, so this needs no special
-# permissions.
-ensure_line() {
-  file="$1"
-  line="$2"
-
-  touch "$file" 2>/dev/null || return 0
-
-  if ! grep -qF "$line" "$file" 2>/dev/null; then
-    {
-      echo ""
-      echo "# Added by cl installer"
-      echo "$line"
-    } >> "$file"
-    echo "  updated $file"
-  fi
-}
-
-path_export="export PATH=\"$INSTALL_DIR:\$PATH\""
-
-echo
-echo "Setting up shell integration so a new terminal works immediately..."
-
-# Wire up every shell found on the system, not just the current
-# $SHELL, so `cl` works right away regardless of which terminal/shell
-# the user happens to open next.
-if command -v zsh >/dev/null 2>&1; then
-  zshrc="$HOME/.zshrc"
-  case ":$PATH:" in *":$INSTALL_DIR:"*) ;; *) ensure_line "$zshrc" "$path_export" ;; esac
-  ensure_line "$zshrc" 'eval "$(cl init zsh)"'
-fi
-
-if command -v bash >/dev/null 2>&1; then
-  bashrc="$HOME/.bashrc"
-  case ":$PATH:" in *":$INSTALL_DIR:"*) ;; *) ensure_line "$bashrc" "$path_export" ;; esac
-  ensure_line "$bashrc" 'eval "$(cl init bash)"'
-
-  # On macOS, Terminal.app runs bash as a login shell, which reads
-  # ~/.bash_profile instead of ~/.bashrc. Only touch it if it already
-  # exists, to avoid surprising Linux users who don't use it.
-  bash_profile="$HOME/.bash_profile"
-  if [ -f "$bash_profile" ]; then
-    case ":$PATH:" in *":$INSTALL_DIR:"*) ;; *) ensure_line "$bash_profile" "$path_export" ;; esac
-    ensure_line "$bash_profile" 'eval "$(cl init bash)"'
-  fi
-fi
-
-echo
-echo "Done. Open a new terminal and cl is ready to use (no restart needed for anything else)."
+echo ""
+echo "Done. Make sure $INSTALL_DIR is on your PATH, then cl is ready to use."
