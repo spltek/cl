@@ -54,12 +54,13 @@ func TestScript_PowerShell(t *testing.T) {
 // infoFlags are every informational flag/subcommand cl's own arg
 // parser (cmd/cl/main.go) handles directly, as opposed to treating
 // its argument as a fuzzy-filter for the interactive picker (adding,
-// editing and removing commands all happen inside the picker itself,
-// via ctrl+a/ctrl+e/ctrl+r - there is no longer a separate CLI flag
-// for them). Each shell wrapper must pass all of these straight
-// through to the real binary instead of capturing its output via
-// command substitution - otherwise -v/-h output would get pushed
-// into the prompt buffer instead of printed normally.
+// editing, renaming and deleting commands all happen inside the
+// picker itself, via ctrl+a/ctrl+e/ctrl+r/ctrl+d - there is no
+// longer a separate CLI flag for them). Each shell wrapper must pass
+// all of these straight through to the real binary instead of
+// capturing its output via command substitution - otherwise -v/-h
+// output would get pushed into the prompt buffer instead of printed
+// normally.
 var infoFlags = []string{"init", "-v", "--version", "-h", "--help", "help"}
 
 func TestScript_ZshPassesThroughInfoFlags(t *testing.T) {

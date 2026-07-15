@@ -5,8 +5,9 @@
 # This defines a `cl` function that shadows the `cl` binary on PATH.
 # Informational commands are passed straight through so their output
 # prints normally instead of being captured. Everything else opens
-# the interactive picker, where adding/editing/removing commands
-# happens via ctrl+a/ctrl+e/ctrl+r. Interactive picker selections try
+# the interactive picker, where adding/editing/renaming/deleting
+# commands happens via ctrl+a/ctrl+e/ctrl+r/ctrl+d. Interactive
+# picker selections try
 # to use PSReadLine's Insert() to pre-fill the next line (same
 # mechanism used by modules like PSFzf); if that is not available, it
 # falls back to an explicit confirmation prompt before running the

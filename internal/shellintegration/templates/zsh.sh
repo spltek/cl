@@ -6,9 +6,9 @@
 # Informational commands are passed straight through so their output
 # prints normally instead of being captured and pushed into the
 # prompt buffer. Everything else opens the interactive picker, where
-# adding/editing/removing commands happens via ctrl+a/ctrl+e/ctrl+r -
-# that's the only invocation that needs the capture-and-inject dance
-# below.
+# adding/editing/renaming/deleting commands happens via
+# ctrl+a/ctrl+e/ctrl+r/ctrl+d - that's the only invocation that needs
+# the capture-and-inject dance below.
 cl() {
   case "$1" in
     init|-v|--version|-h|--help|help)

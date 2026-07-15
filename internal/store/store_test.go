@@ -54,6 +54,41 @@ func TestSetGetRemove(t *testing.T) {
 	}
 }
 
+func TestRename(t *testing.T) {
+	withTempConfigDir(t)
+
+	s, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	s.Set("build", "npm run build")
+
+	if !s.Rename("build", "compile") {
+		t.Fatalf("Rename(build, compile) = false, want true")
+	}
+
+	if _, ok := s.Get("build"); ok {
+		t.Fatalf("Get(build) after Rename: found, want not found")
+	}
+
+	cmd, ok := s.Get("compile")
+	if !ok || cmd != "npm run build" {
+		t.Fatalf("Get(compile) after Rename = (%q, %v), want (%q, true)", cmd, ok, "npm run build")
+	}
+
+	if s.Rename("does-not-exist", "whatever") {
+		t.Fatalf("Rename(does-not-exist, ...) = true, want false")
+	}
+
+	if !s.Rename("compile", "compile") {
+		t.Fatalf("Rename(compile, compile) = false, want true (renaming to the same name is a no-op)")
+	}
+	if cmd, ok := s.Get("compile"); !ok || cmd != "npm run build" {
+		t.Fatalf("Get(compile) after no-op Rename = (%q, %v), want (%q, true)", cmd, ok, "npm run build")
+	}
+}
+
 func TestSaveAndLoadRoundTrip(t *testing.T) {
 	dir := withTempConfigDir(t)
 

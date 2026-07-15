@@ -1,8 +1,8 @@
 // Command cl is a personal command-list manager: it persists a
 // name -> shell command dictionary and lets you fuzzy-search it
-// interactively. Adding, editing and removing commands all happen
-// inside the interactive picker itself (ctrl+a/ctrl+e/ctrl+r) - see
-// printUsage below.
+// interactively. Adding, editing, renaming and deleting commands all
+// happen inside the interactive picker itself
+// (ctrl+a/ctrl+e/ctrl+r/ctrl+d) - see printUsage below.
 package main
 
 import (
@@ -89,7 +89,8 @@ Usage:
 Inside the picker:
   ctrl+a   add a new command (asks for a name, then the shell command)
   ctrl+e   edit the highlighted command
-  ctrl+r   remove the highlighted command
+  ctrl+r   rename the highlighted command
+  ctrl+d   delete the highlighted command
   enter    pick the highlighted command
   esc      cancel`)
 }

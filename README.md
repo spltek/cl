@@ -24,7 +24,12 @@ separate "add"/"remove" subcommand to remember:
 - `Ctrl+E` edits the highlighted command: its current value appears
   pre-filled and editable; `Enter` asks "save?" (`y` saves, `Esc`/`n`
   discards the edit and leaves the stored command untouched).
-- `Ctrl+R` removes the highlighted command, after a `y`/`N`
+- `Ctrl+R` renames the highlighted command: its current name appears
+  pre-filled and editable (spaces are allowed); `Enter` asks
+  "rename?" (`y` saves, `Esc`/`n` discards the rename and leaves the
+  stored name untouched). A name that's already used by another
+  command is rejected in place with an inline message.
+- `Ctrl+D` deletes the highlighted command, after a `y`/`N`
   confirmation.
 - Commands are persisted as JSON in your user config directory
   (`~/Library/Application Support/cl` on macOS, `~/.config/cl` on
@@ -172,6 +177,7 @@ back to an explicit `Run: <command>? [Y/n]` confirmation.
 $ cl
 cl>
   no matching commands
+
 ↑/↓ move
 enter select
 esc cancel
@@ -188,12 +194,14 @@ enter save · esc cancel
 $ cl bui
 cl> bui
 > build  npm run build -- --watch
+
 ↑/↓ move
 enter select
 esc cancel
 ctrl+a add
 ctrl+e edit
-ctrl+r remove
+ctrl+r rename
+ctrl+d delete
 # Enter picks it, it appears on your prompt, Enter again runs it
 
 # press ctrl+e on "build" to edit it in place:
@@ -205,8 +213,17 @@ enter continue · esc cancel
 Save "build" -> npm run build -- --watch --fast ? [y/N]
 y confirm · n/esc cancel
 
-# press ctrl+r on "build" to remove it:
+# press ctrl+r on "build" to rename it:
 
-Remove "build" (npm run build -- --watch --fast) ? [y/N]
+Rename "build":
+release
+enter continue · esc cancel
+# Enter then asks to confirm:
+Rename "build" -> "release" ? [y/N]
+y confirm · n/esc cancel
+
+# press ctrl+d on "release" to delete it:
+
+Delete "release" (npm run build -- --watch --fast) ? [y/N]
 y confirm · n/esc cancel
 ```

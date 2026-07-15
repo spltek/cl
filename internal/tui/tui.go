@@ -1,5 +1,5 @@
 // Package tui implements the interactive command picker and all
-// in-picker management (add/edit/remove). It renders on the
+// in-picker management (add/edit/rename/delete). It renders on the
 // controlling terminal (not on stdout) so that the final selected
 // command can be captured cleanly via command substitution by the
 // calling shell integration.
@@ -38,7 +38,7 @@ func newStyles() styles {
 		selected: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212")),
 		command:  lipgloss.NewStyle().Foreground(lipgloss.Color("244")),
 		help:     lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
-		helpKey:  lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("250")),
+		helpKey:  lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("246")),
 		errMsg:   lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("204")),
 	}
 }
@@ -72,7 +72,8 @@ func (s nameSource) Len() int            { return len(s) }
 
 // mode selects which screen/interaction the model is currently
 // showing. modeList is the default fuzzy-filter picker; the others
-// are the add/edit/remove sub-flows entered via ctrl+a/ctrl+e/ctrl+r.
+// are the add/edit/rename/delete sub-flows entered via
+// ctrl+a/ctrl+e/ctrl+r/ctrl+d.
 type mode int
 
 const (
@@ -80,7 +81,9 @@ const (
 	modeAddName
 	modeAddValue
 	modeEditValue
+	modeRenameName
 	modeConfirmSaveEdit
+	modeConfirmRename
 	modeConfirmDelete
 )
 
@@ -103,7 +106,7 @@ type model struct {
 	// existing command).
 	form textinput.Model
 
-	pendingName  string // name captured by modeAddName, staged until modeAddValue commits it
+	pendingName  string // name captured by modeAddName/modeRenameName, staged until modeAddValue/modeConfirmRename commits it
 	pendingValue string // command captured by modeEditValue, staged until modeConfirmSaveEdit commits it
 	pendingErr   string // inline validation/save error shown next to the active form
 	target       store.Entry
@@ -146,8 +149,8 @@ func (m *model) refilter() {
 }
 
 // finishMutation reloads the in-memory entry list from the store
-// after an add/edit/delete, resets all sub-flow state, and returns
-// to the list screen.
+// after an add/edit/rename/delete, resets all sub-flow state, and
+// returns to the list screen.
 func (m *model) finishMutation() {
 	m.mode = modeList
 	m.pendingName = ""
@@ -181,6 +184,15 @@ func (m *model) startEdit(e store.Entry) {
 	m.form.CursorEnd()
 }
 
+func (m *model) startRename(e store.Entry) {
+	m.mode = modeRenameName
+	m.target = e
+	m.pendingErr = ""
+	m.form = newTextInput("command name (spaces allowed)")
+	m.form.SetValue(e.Name)
+	m.form.CursorEnd()
+}
+
 func (m *model) startDelete(e store.Entry) {
 	m.mode = modeConfirmDelete
 	m.target = e
@@ -192,9 +204,9 @@ func (m model) Init() tea.Cmd {
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m.mode {
-	case modeAddName, modeAddValue, modeEditValue:
+	case modeAddName, modeAddValue, modeEditValue, modeRenameName:
 		return m.updateForm(msg)
-	case modeConfirmSaveEdit, modeConfirmDelete:
+	case modeConfirmSaveEdit, modeConfirmRename, modeConfirmDelete:
 		return m.updateConfirm(msg)
 	default:
 		return m.updateList(msg)
@@ -245,6 +257,12 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "ctrl+r":
 			if len(m.filtered) > 0 {
+				m.startRename(m.filtered[m.cursor])
+			}
+			return m, nil
+
+		case "ctrl+d":
+			if len(m.filtered) > 0 {
 				m.startDelete(m.filtered[m.cursor])
 			}
 			return m, nil
@@ -258,8 +276,9 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// updateForm drives modeAddName, modeAddValue and modeEditValue: a
-// single-line input plus enter-to-continue/esc-to-cancel.
+// updateForm drives modeAddName, modeAddValue, modeEditValue and
+// modeRenameName: a single-line input plus
+// enter-to-continue/esc-to-cancel.
 func (m model) updateForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 		switch keyMsg.String() {
@@ -323,13 +342,29 @@ func (m model) submitForm() (tea.Model, tea.Cmd) {
 		m.pendingValue = value
 		m.mode = modeConfirmSaveEdit
 		return m, nil
+
+	case modeRenameName:
+		if value == "" {
+			m.pendingErr = "name cannot be empty"
+			return m, nil
+		}
+		if value != m.target.Name {
+			if _, exists := m.st.Get(value); exists {
+				m.pendingErr = fmt.Sprintf("%q is already used - choose another name", value)
+				return m, nil
+			}
+		}
+
+		m.pendingName = value
+		m.mode = modeConfirmRename
+		return m, nil
 	}
 
 	return m, nil
 }
 
 // updateConfirm drives the yes/no confirmation screens for saving an
-// edit and for deleting an entry.
+// edit, for renaming, and for deleting an entry.
 func (m model) updateConfirm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	keyMsg, ok := msg.(tea.KeyPressMsg)
 	if !ok {
@@ -341,6 +376,11 @@ func (m model) updateConfirm(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch m.mode {
 		case modeConfirmSaveEdit:
 			m.st.Set(m.target.Name, m.pendingValue)
+			if err := m.st.Save(); err != nil {
+				m.pendingErr = fmt.Sprintf("save failed: %v", err)
+			}
+		case modeConfirmRename:
+			m.st.Rename(m.target.Name, m.pendingName)
 			if err := m.st.Save(); err != nil {
 				m.pendingErr = fmt.Sprintf("save failed: %v", err)
 			}
@@ -373,10 +413,14 @@ func (m model) View() tea.View {
 		return m.viewForm(fmt.Sprintf("Add command %q - shell command:", m.pendingName), "enter save · esc cancel")
 	case modeEditValue:
 		return m.viewForm(fmt.Sprintf("Edit %q:", m.target.Name), "enter continue · esc cancel")
+	case modeRenameName:
+		return m.viewForm(fmt.Sprintf("Rename %q:", m.target.Name), "enter continue · esc cancel")
 	case modeConfirmSaveEdit:
 		return tea.NewView(m.viewConfirm(fmt.Sprintf("Save %q -> %s ?", m.target.Name, m.pendingValue)))
+	case modeConfirmRename:
+		return tea.NewView(m.viewConfirm(fmt.Sprintf("Rename %q -> %q ?", m.target.Name, m.pendingName)))
 	case modeConfirmDelete:
-		return tea.NewView(m.viewConfirm(fmt.Sprintf("Remove %q (%s) ?", m.target.Name, m.target.Command)))
+		return tea.NewView(m.viewConfirm(fmt.Sprintf("Delete %q (%s) ?", m.target.Name, m.target.Command)))
 	default:
 		return m.viewList()
 	}
@@ -410,6 +454,7 @@ func (m model) viewList() tea.View {
 		b.WriteString("\n")
 	}
 
+	b.WriteString("\n")
 	b.WriteString(m.listHelp())
 
 	v := tea.NewView(b.String())
@@ -427,7 +472,11 @@ func (m model) listHelp() string {
 		{"ctrl+a", "add"},
 	}
 	if len(m.filtered) != 0 {
-		items = append(items, [2]string{"ctrl+e", "edit"}, [2]string{"ctrl+r", "remove"})
+		items = append(items,
+			[2]string{"ctrl+e", "edit"},
+			[2]string{"ctrl+r", "rename"},
+			[2]string{"ctrl+d", "delete"},
+		)
 	}
 
 	lines := make([]string, len(items))
@@ -478,9 +527,9 @@ func (m model) viewConfirm(prompt string) string {
 
 // Run displays the interactive picker seeded with initialFilter and
 // returns the shell command chosen by the user, or "" if the user
-// cancelled the selection. Add/edit/remove sub-flows persist to st
-// immediately as they're confirmed, independently of the final
-// selection.
+// cancelled the selection. Add/edit/rename/delete sub-flows persist
+// to st immediately as they're confirmed, independently of the
+// final selection.
 func Run(initialFilter string, st *store.Store) (string, error) {
 	ttyIn, ttyOut, err := tea.OpenTTY()
 	if err != nil {

@@ -461,12 +461,145 @@ func TestEdit_CtrlEOnEmptyFilteredListIsNoop(t *testing.T) {
 	}
 }
 
-// --- Delete flow (ctrl+r) ---
+// --- Rename flow (ctrl+r) ---
 
-func TestDelete_CtrlREntersConfirmDeleteForHighlightedEntry(t *testing.T) {
+func TestRename_CtrlRPrefillsFormWithCurrentName(t *testing.T) {
 	m := newModel("build", testStore(t), testStyles())
 
 	m, _ = update(m, ctrlKey('r'))
+
+	if m.mode != modeRenameName {
+		t.Fatalf("mode = %v, want modeRenameName", m.mode)
+	}
+	if m.form.Value() != "build" {
+		t.Fatalf("form value = %q, want prefilled with %q", m.form.Value(), "build")
+	}
+}
+
+func TestRename_FullFlowPersistsAfterConfirm(t *testing.T) {
+	st := testStore(t)
+	m := newModel("build", st, testStyles())
+
+	m, _ = update(m, ctrlKey('r'))
+	for range "build" {
+		m, _ = update(m, key(tea.KeyBackspace))
+	}
+	m = typeString(m, "compile")
+	m, _ = update(m, key(tea.KeyEnter))
+
+	if m.mode != modeConfirmRename {
+		t.Fatalf("mode = %v, want modeConfirmRename (pendingErr=%q)", m.mode, m.pendingErr)
+	}
+
+	m, _ = update(m, runeKey('y'))
+
+	if m.mode != modeList {
+		t.Fatalf("mode = %v, want modeList after confirming rename", m.mode)
+	}
+
+	if _, ok := st.Get("build"); ok {
+		t.Fatalf("store.Get(build) still exists, want it renamed away")
+	}
+	got, ok := st.Get("compile")
+	if !ok || got != "npm run build" {
+		t.Fatalf("store.Get(compile) = (%q, %v), want (%q, true)", got, ok, "npm run build")
+	}
+}
+
+func TestRename_DuplicateNameShowsErrorAndStaysInRenameName(t *testing.T) {
+	m := newModel("build", testStore(t), testStyles())
+
+	m, _ = update(m, ctrlKey('r'))
+	for range "build" {
+		m, _ = update(m, key(tea.KeyBackspace))
+	}
+	m = typeString(m, "cleanup") // already exists in testEntries()
+	m, _ = update(m, key(tea.KeyEnter))
+
+	if m.mode != modeRenameName {
+		t.Fatalf("mode = %v, want modeRenameName to stay after duplicate name", m.mode)
+	}
+	if m.pendingErr == "" {
+		t.Fatalf("pendingErr = empty, want a non-empty duplicate-name message")
+	}
+}
+
+func TestRename_ToSameNameIsAllowed(t *testing.T) {
+	st := testStore(t)
+	m := newModel("build", st, testStyles())
+
+	m, _ = update(m, ctrlKey('r'))
+	m, _ = update(m, key(tea.KeyEnter)) // resubmit the prefilled, unchanged name
+
+	if m.mode != modeConfirmRename {
+		t.Fatalf("mode = %v, want modeConfirmRename (pendingErr=%q)", m.mode, m.pendingErr)
+	}
+
+	m, _ = update(m, runeKey('y'))
+
+	got, ok := st.Get("build")
+	if !ok || got != "npm run build" {
+		t.Fatalf("store.Get(build) = (%q, %v), want it to still exist unchanged", got, ok)
+	}
+}
+
+func TestRename_EmptyNameShowsErrorAndStaysInRenameName(t *testing.T) {
+	m := newModel("build", testStore(t), testStyles())
+
+	m, _ = update(m, ctrlKey('r'))
+	for range "build" {
+		m, _ = update(m, key(tea.KeyBackspace))
+	}
+	m = typeString(m, "   ")
+	m, _ = update(m, key(tea.KeyEnter))
+
+	if m.mode != modeRenameName {
+		t.Fatalf("mode = %v, want modeRenameName to stay after empty name", m.mode)
+	}
+	if m.pendingErr == "" {
+		t.Fatalf("pendingErr = empty, want a non-empty validation message")
+	}
+}
+
+func TestRename_DecliningConfirmationLeavesStoreUnchanged(t *testing.T) {
+	st := testStore(t)
+	m := newModel("build", st, testStyles())
+
+	m, _ = update(m, ctrlKey('r'))
+	for range "build" {
+		m, _ = update(m, key(tea.KeyBackspace))
+	}
+	m = typeString(m, "compile")
+	m, _ = update(m, key(tea.KeyEnter))
+	m, _ = update(m, runeKey('n'))
+
+	if m.mode != modeList {
+		t.Fatalf("mode = %v, want modeList after declining", m.mode)
+	}
+	if _, ok := st.Get("build"); !ok {
+		t.Fatalf("store.Get(build) missing, want it unchanged after declining the rename")
+	}
+}
+
+func TestRename_CtrlROnEmptyFilteredListIsNoop(t *testing.T) {
+	m := newModel("does-not-exist", testStore(t), testStyles())
+	if len(m.filtered) != 0 {
+		t.Fatalf("filtered len = %d, want 0", len(m.filtered))
+	}
+
+	m, _ = update(m, ctrlKey('r'))
+
+	if m.mode != modeList {
+		t.Fatalf("mode = %v, want modeList to stay when there is nothing to rename", m.mode)
+	}
+}
+
+// --- Delete flow (ctrl+d) ---
+
+func TestDelete_CtrlDEntersConfirmDeleteForHighlightedEntry(t *testing.T) {
+	m := newModel("build", testStore(t), testStyles())
+
+	m, _ = update(m, ctrlKey('d'))
 
 	if m.mode != modeConfirmDelete {
 		t.Fatalf("mode = %v, want modeConfirmDelete", m.mode)
@@ -480,7 +613,7 @@ func TestDelete_ConfirmingRemovesFromStore(t *testing.T) {
 	st := testStore(t)
 	m := newModel("build", st, testStyles())
 
-	m, _ = update(m, ctrlKey('r'))
+	m, _ = update(m, ctrlKey('d'))
 	m, _ = update(m, runeKey('y'))
 
 	if m.mode != modeList {
@@ -500,7 +633,7 @@ func TestDelete_DecliningLeavesStoreUnchanged(t *testing.T) {
 	st := testStore(t)
 	m := newModel("build", st, testStyles())
 
-	m, _ = update(m, ctrlKey('r'))
+	m, _ = update(m, ctrlKey('d'))
 	m, _ = update(m, runeKey('n'))
 
 	if m.mode != modeList {
@@ -515,7 +648,7 @@ func TestDelete_EscDeclinesLeavesStoreUnchanged(t *testing.T) {
 	st := testStore(t)
 	m := newModel("build", st, testStyles())
 
-	m, _ = update(m, ctrlKey('r'))
+	m, _ = update(m, ctrlKey('d'))
 	m, _ = update(m, key(tea.KeyEsc))
 
 	if m.mode != modeList {
@@ -555,7 +688,7 @@ func TestView_ListShowsEntriesAndHelpWithoutCommands(t *testing.T) {
 	view := m.View().Content
 	for _, want := range []string{
 		"backup", "build", "cleanup",
-		"ctrl+a", "add", "ctrl+e", "edit", "ctrl+r", "remove",
+		"ctrl+a", "add", "ctrl+e", "edit", "ctrl+r", "rename", "ctrl+d", "delete",
 	} {
 		if !strings.Contains(view, want) {
 			t.Errorf("View() = %q, want it to contain %q", view, want)
@@ -570,8 +703,8 @@ func TestView_EmptyListOnlyMentionsAdd(t *testing.T) {
 	if !strings.Contains(view, "ctrl+a") || !strings.Contains(view, "add") {
 		t.Errorf("View() = %q, want it to mention ctrl+a add", view)
 	}
-	if strings.Contains(view, "ctrl+e") || strings.Contains(view, "ctrl+r") {
-		t.Errorf("View() = %q, want it not to mention edit/remove when the list is empty", view)
+	if strings.Contains(view, "ctrl+e") || strings.Contains(view, "ctrl+r") || strings.Contains(view, "ctrl+d") {
+		t.Errorf("View() = %q, want it not to mention edit/rename/delete when the list is empty", view)
 	}
 	if !strings.Contains(view, "no matching commands") {
 		t.Errorf("View() = %q, want it to mention there are no matching commands", view)
@@ -640,9 +773,36 @@ func TestView_ConfirmSaveEditShowsOldNameAndNewValue(t *testing.T) {
 	}
 }
 
-func TestView_ConfirmDeleteShowsNameAndCommand(t *testing.T) {
+func TestView_RenameNameShowsTargetName(t *testing.T) {
 	m := newModel("build", testStore(t), testStyles())
 	m, _ = update(m, ctrlKey('r'))
+
+	view := m.View().Content
+	if !strings.Contains(view, "Rename") || !strings.Contains(view, "build") {
+		t.Errorf("View() = %q, want it to mention renaming the entry", view)
+	}
+}
+
+func TestView_ConfirmRenameShowsOldAndNewName(t *testing.T) {
+	m := newModel("build", testStore(t), testStyles())
+	m, _ = update(m, ctrlKey('r'))
+	for range "build" {
+		m, _ = update(m, key(tea.KeyBackspace))
+	}
+	m = typeString(m, "compile")
+	m, _ = update(m, key(tea.KeyEnter))
+
+	view := m.View().Content
+	for _, want := range []string{"build", "compile", "[y/N]"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("View() = %q, want it to contain %q", view, want)
+		}
+	}
+}
+
+func TestView_ConfirmDeleteShowsNameAndCommand(t *testing.T) {
+	m := newModel("build", testStore(t), testStyles())
+	m, _ = update(m, ctrlKey('d'))
 
 	view := m.View().Content
 	for _, want := range []string{"build", "npm run build", "[y/N]"} {
@@ -652,13 +812,13 @@ func TestView_ConfirmDeleteShowsNameAndCommand(t *testing.T) {
 	}
 }
 
-func TestDelete_CtrlROnEmptyFilteredListIsNoop(t *testing.T) {
+func TestDelete_CtrlDOnEmptyFilteredListIsNoop(t *testing.T) {
 	m := newModel("does-not-exist", testStore(t), testStyles())
 	if len(m.filtered) != 0 {
 		t.Fatalf("filtered len = %d, want 0", len(m.filtered))
 	}
 
-	m, _ = update(m, ctrlKey('r'))
+	m, _ = update(m, ctrlKey('d'))
 
 	if m.mode != modeList {
 		t.Fatalf("mode = %v, want modeList to stay when there is nothing to remove", m.mode)

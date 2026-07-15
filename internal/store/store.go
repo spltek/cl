@@ -131,6 +131,23 @@ func (s *Store) Remove(name string) bool {
 	return true
 }
 
+// Rename changes the key an existing command is stored under from
+// oldName to newName, keeping its value. It returns false if
+// oldName was not present. If newName == oldName, it is a no-op
+// that returns true.
+func (s *Store) Rename(oldName, newName string) bool {
+	cmd, ok := s.commands[oldName]
+	if !ok {
+		return false
+	}
+	if newName == oldName {
+		return true
+	}
+	delete(s.commands, oldName)
+	s.commands[newName] = cmd
+	return true
+}
+
 // Entry is a single name/command pair.
 type Entry struct {
 	Name    string
