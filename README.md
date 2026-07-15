@@ -1,10 +1,10 @@
 # cl — command list
 
 A tiny personal command manager. `cl` stores a `name -> shell command`
-dictionary in a JSON file and lets you fuzzy-search it interactively
-from your terminal. Selecting a command writes it onto your shell
-prompt (not run yet) so a second Enter executes it exactly as if you
-had typed it yourself.
+dictionary in a JSON file and lets you search it interactively from
+your terminal. Selecting a command writes it onto your shell prompt
+(not run yet) so a second Enter executes it exactly as if you had
+typed it yourself.
 
 ## How it works
 
@@ -12,8 +12,10 @@ Everything happens inside a single interactive picker — there's no
 separate "add"/"remove" subcommand to remember:
 
 - `cl` opens the picker; `cl <filter>` opens it pre-filtered.
-- Type to fuzzy-filter by name, use the arrow keys to move, `Enter`
-  to pick, `Esc`/`Ctrl-C` to cancel.
+- Type to filter by name (case-insensitive substring match — the
+  whole typed text has to appear together, not just its letters
+  scattered anywhere in the name), use the arrow keys to move,
+  `Enter` to pick, `Esc`/`Ctrl-C` to cancel.
 - `Ctrl+A` adds a new command: it first asks for a name (spaces are
   allowed — there's no CLI token boundary to worry about anymore),
   then, on `Enter`, asks for the shell command itself and saves it

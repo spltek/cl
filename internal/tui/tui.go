@@ -9,10 +9,9 @@ import (
 	"fmt"
 	"strings"
 
-	"charm.land/bubbles/v2/textinput"
+	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
-	"github.com/sahilm/fuzzy"
 
 	"github.com/silvio/cl/internal/store"
 )
@@ -43,35 +42,74 @@ func newStyles() styles {
 	}
 }
 
-// newTextInput returns a focused textinput.Model configured to draw
-// a real terminal cursor - a thin, blinking "|" bar, the shape most
-// shells use by default - instead of bubbles' virtual, block-shaped
-// one. Disabling the virtual cursor here means textinput.View()
-// renders the character that would be underneath it as plain text;
-// the real cursor itself is reported separately via Model.Cursor()
-// and plugged into the top-level tea.View in viewList/viewForm.
-func newTextInput(placeholder string) textinput.Model {
-	ti := textinput.New()
-	ti.Placeholder = placeholder
-	ti.SetVirtualCursor(false)
+// newTextArea returns a focused textarea.Model configured as a
+// single logical line of text that word-wraps across as many
+// terminal rows as it needs - the same way any other long line
+// wraps in the terminal - instead of scrolling horizontally or
+// overflowing past the terminal's edge. It draws a real terminal
+// cursor - a thin, blinking "|" bar, the shape most shells use by
+// default - instead of bubbles' virtual, block-shaped one.
+//
+// It's kept to a single logical line by construction: Enter never
+// reaches it (updateForm/updateList intercept it to submit/select
+// instead), and pasted text has its newlines collapsed to spaces by
+// sanitizePaste before being inserted.
+func newTextArea(prompt, placeholder string) textarea.Model {
+	ta := textarea.New()
+	ta.Prompt = prompt // kept for introspection (Width()); rendering uses the func below instead
+	ta.Placeholder = placeholder
+	ta.ShowLineNumbers = false
 
-	s := ti.Styles()
+	// The prompt marks where a logical line begins, so it must only
+	// show on its first (possibly only) row - continuation rows from
+	// wrapping get a same-width blank gutter instead, the same way a
+	// shell's own multi-line prompt continuation works.
+	ta.SetPromptFunc(lipgloss.Width(prompt), func(info textarea.PromptInfo) string {
+		if info.LineNumber == 0 {
+			return prompt
+		}
+		return ""
+	})
+
+	// Grow/shrink to fit exactly the (soft-wrapped) content - never
+	// more, never less - so there's no dead space and no internal
+	// scrolling to reconcile with our own row math below.
+	ta.DynamicHeight = true
+	ta.MinHeight = 1
+	ta.SetHeight(1)
+
+	ta.SetVirtualCursor(false)
+
+	s := ta.Styles()
 	s.Cursor.Shape = tea.CursorBar
 	s.Cursor.Color = nil // inherit the terminal's own cursor color
-	ti.SetStyles(s)
+	// This field is always exactly one (possibly wrapped) logical
+	// line, so "the current line" - which textarea highlights with
+	// a background fill by default, as in a code editor - is the
+	// entire field. Disable that so it renders as a plain input.
+	s.Focused.CursorLine = lipgloss.NewStyle()
+	s.Blurred.CursorLine = lipgloss.NewStyle()
+	ta.SetStyles(s)
 
-	ti.Focus()
-	return ti
+	ta.Focus()
+	return ta
 }
 
-// nameSource adapts a slice of entry names to fuzzy.Source.
-type nameSource []string
-
-func (s nameSource) String(i int) string { return s[i] }
-func (s nameSource) Len() int            { return len(s) }
+// sanitizePaste collapses any newlines in pasted text into spaces.
+// input/form must always hold exactly one logical line - typing
+// can't violate that since Enter is handled before it ever reaches
+// them, but a clipboard paste can contain arbitrary text, including
+// embedded newlines that would otherwise turn a name/command/filter
+// into multiple logical lines.
+func sanitizePaste(s string) string {
+	s = strings.ReplaceAll(s, "\r\n", " ")
+	s = strings.ReplaceAll(s, "\r", " ")
+	s = strings.ReplaceAll(s, "\n", " ")
+	return s
+}
 
 // mode selects which screen/interaction the model is currently
-// showing. modeList is the default fuzzy-filter picker; the others
+// showing. modeList is the default filter picker; the others
 // are the add/edit/rename/delete sub-flows entered via
 // ctrl+a/ctrl+e/ctrl+r/ctrl+d.
 type mode int
@@ -90,7 +128,7 @@ const (
 type model struct {
 	st *store.Store
 
-	input    textinput.Model
+	input    textarea.Model
 	all      []store.Entry
 	filtered []store.Entry
 	cursor   int
@@ -99,12 +137,20 @@ type model struct {
 	quitting bool
 	styles   styles
 
+	// width is the known terminal width (0 until the first
+	// tea.WindowSizeMsg arrives). It's applied to input/form via
+	// applyWidth, and to the plain text surrounding them (titles,
+	// help, errors) via wrap/wrapStyled, so that nothing ever
+	// overflows onto the terminal's own line wrap - which would
+	// throw off the fixed row math (cursor Y) below it.
+	width int
+
 	mode mode
 
 	// form is the single-line input reused by every add/edit
 	// sub-flow (name entry, then command entry, then editing an
 	// existing command).
-	form textinput.Model
+	form textarea.Model
 
 	pendingName  string // name captured by modeAddName/modeRenameName, staged until modeAddValue/modeConfirmRename commits it
 	pendingValue string // command captured by modeEditValue, staged until modeConfirmSaveEdit commits it
@@ -113,33 +159,82 @@ type model struct {
 }
 
 func newModel(initialFilter string, st *store.Store, sty styles) model {
-	ti := newTextInput("type to filter...")
-	ti.Prompt = "cl> "
+	ti := newTextArea("cl> ", "type to filter...")
 	ti.SetValue(initialFilter)
 	ti.CursorEnd()
 
-	m := model{st: st, input: ti, styles: sty}
+	// form isn't shown until an add/edit/rename sub-flow starts (see
+	// setForm), but it must still be a real textarea.Model - not the
+	// zero value - since applyWidth touches it unconditionally on
+	// every tea.WindowSizeMsg regardless of the current mode.
+	m := model{st: st, input: ti, form: newTextArea("> ", ""), styles: sty}
 	m.all = st.List()
 	m.refilter()
 
 	return m
 }
 
+// setForm replaces m.form with a fresh input and re-applies the
+// known terminal width to it (newTextArea can't do this itself,
+// since it has no access to the model).
+func (m *model) setForm(ta textarea.Model) {
+	m.form = ta
+	m.applyWidth()
+}
+
+// applyWidth constrains input/form to the known terminal width -
+// textarea.SetWidth already accounts for its own prompt internally
+// - so that a value that would otherwise overflow the terminal
+// word-wraps onto extra rows of its own instead of onto the
+// terminal's next row. It's a no-op until the first
+// tea.WindowSizeMsg is known, and must be re-applied any time form
+// is replaced with a fresh textarea.Model (each add/edit/rename
+// sub-step does).
+func (m *model) applyWidth() {
+	if m.width <= 0 {
+		return
+	}
+	m.input.SetWidth(m.width)
+	m.form.SetWidth(m.width)
+}
+
+// wrap word-wraps s to the known terminal width, exactly like
+// input/form do via applyWidth, so plain text (titles, help,
+// prompts) never overflows onto the terminal's own line wrap
+// either. It's a no-op until the first tea.WindowSizeMsg is known.
+func (m *model) wrap(s string) string {
+	if m.width <= 0 {
+		return s
+	}
+	return lipgloss.NewStyle().Width(m.width).Render(s)
+}
+
+// wrapStyled is wrap, with sty applied to the text at the same time
+// (word-wrapping and styling in a single Render, so the style - not
+// just the raw text - is what ends up constrained to m.width).
+func (m *model) wrapStyled(sty lipgloss.Style, s string) string {
+	if m.width <= 0 {
+		return sty.Render(s)
+	}
+	return sty.Width(m.width).Render(s)
+}
+
+// refilter narrows m.all down to entries whose name contains the
+// current filter query as a case-insensitive substring - the whole
+// typed sequence has to appear together, not just its letters
+// scattered anywhere in the name (as a fuzzy subsequence match
+// would allow).
 func (m *model) refilter() {
-	query := m.input.Value()
+	query := strings.ToLower(m.input.Value())
 
 	if query == "" {
 		m.filtered = m.all
 	} else {
-		names := make(nameSource, len(m.all))
-		for i, e := range m.all {
-			names[i] = e.Name
-		}
-
-		matches := fuzzy.FindFrom(query, names)
-		filtered := make([]store.Entry, 0, len(matches))
-		for _, match := range matches {
-			filtered = append(filtered, m.all[match.Index])
+		filtered := make([]store.Entry, 0, len(m.all))
+		for _, e := range m.all {
+			if strings.Contains(strings.ToLower(e.Name), query) {
+				filtered = append(filtered, e)
+			}
 		}
 		m.filtered = filtered
 	}
@@ -172,14 +267,14 @@ func (m *model) cancelForm() {
 func (m *model) startAdd() {
 	m.mode = modeAddName
 	m.pendingErr = ""
-	m.form = newTextInput("command name (spaces allowed)")
+	m.setForm(newTextArea("> ", "command name (spaces allowed)"))
 }
 
 func (m *model) startEdit(e store.Entry) {
 	m.mode = modeEditValue
 	m.target = e
 	m.pendingErr = ""
-	m.form = newTextInput("command")
+	m.setForm(newTextArea("> ", "command"))
 	m.form.SetValue(e.Command)
 	m.form.CursorEnd()
 }
@@ -188,7 +283,7 @@ func (m *model) startRename(e store.Entry) {
 	m.mode = modeRenameName
 	m.target = e
 	m.pendingErr = ""
-	m.form = newTextInput("command name (spaces allowed)")
+	m.setForm(newTextArea("> ", "command name (spaces allowed)"))
 	m.form.SetValue(e.Name)
 	m.form.CursorEnd()
 }
@@ -203,6 +298,11 @@ func (m model) Init() tea.Cmd {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if sizeMsg, ok := msg.(tea.WindowSizeMsg); ok {
+		m.width = sizeMsg.Width
+		m.applyWidth()
+	}
+
 	switch m.mode {
 	case modeAddName, modeAddValue, modeEditValue, modeRenameName:
 		return m.updateForm(msg)
@@ -269,6 +369,12 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	if pasteMsg, ok := msg.(tea.PasteMsg); ok {
+		m.input.InsertString(sanitizePaste(pasteMsg.Content))
+		m.refilter()
+		return m, nil
+	}
+
 	var cmd tea.Cmd
 	m.input, cmd = m.input.Update(msg)
 	m.refilter()
@@ -289,6 +395,11 @@ func (m model) updateForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			return m.submitForm()
 		}
+	}
+
+	if pasteMsg, ok := msg.(tea.PasteMsg); ok {
+		m.form.InsertString(sanitizePaste(pasteMsg.Content))
+		return m, nil
 	}
 
 	var cmd tea.Cmd
@@ -316,7 +427,7 @@ func (m model) submitForm() (tea.Model, tea.Cmd) {
 		m.pendingName = value
 		m.pendingErr = ""
 		m.mode = modeAddValue
-		m.form = newTextInput("shell command")
+		m.setForm(newTextArea("> ", "shell command"))
 		return m, nil
 
 	case modeAddValue:
@@ -458,7 +569,7 @@ func (m model) viewList() tea.View {
 	b.WriteString(m.listHelp())
 
 	v := tea.NewView(b.String())
-	v.Cursor = m.input.Cursor() // the filter input is always on row 0
+	v.Cursor = m.input.Cursor() // the filter input always starts at row 0
 	return v
 }
 
@@ -489,21 +600,22 @@ func (m model) listHelp() string {
 func (m model) viewForm(title, help string) tea.View {
 	var b strings.Builder
 
-	b.WriteString(title)
+	titleView := m.wrap(title)
+	b.WriteString(titleView)
 	b.WriteString("\n")
 	b.WriteString(m.form.View())
 	b.WriteString("\n")
 
 	if m.pendingErr != "" {
-		b.WriteString(m.styles.errMsg.Render(m.pendingErr))
+		b.WriteString(m.wrapStyled(m.styles.errMsg, m.pendingErr))
 		b.WriteString("\n")
 	}
 
-	b.WriteString(m.styles.help.Render(help))
+	b.WriteString(m.wrapStyled(m.styles.help, help))
 
 	v := tea.NewView(b.String())
 	if cur := m.form.Cursor(); cur != nil {
-		cur.Position.Y = 1 // the title occupies row 0
+		cur.Position.Y += lipgloss.Height(titleView) // the title occupies the row(s) above the form
 		v.Cursor = cur
 	}
 	return v
@@ -512,15 +624,15 @@ func (m model) viewForm(title, help string) tea.View {
 func (m model) viewConfirm(prompt string) string {
 	var b strings.Builder
 
-	b.WriteString(prompt)
-	b.WriteString(" [y/N]\n")
+	b.WriteString(m.wrap(prompt + " [y/N]"))
+	b.WriteString("\n")
 
 	if m.pendingErr != "" {
-		b.WriteString(m.styles.errMsg.Render(m.pendingErr))
+		b.WriteString(m.wrapStyled(m.styles.errMsg, m.pendingErr))
 		b.WriteString("\n")
 	}
 
-	b.WriteString(m.styles.help.Render("y confirm · n/esc cancel"))
+	b.WriteString(m.wrapStyled(m.styles.help, "y confirm · n/esc cancel"))
 
 	return b.String()
 }

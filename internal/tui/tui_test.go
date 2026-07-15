@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/silvio/cl/internal/store"
 )
@@ -101,6 +102,25 @@ func TestNewModel_FilterNarrowsByName(t *testing.T) {
 
 	if len(m.filtered) != 1 || m.filtered[0].Name != "build" {
 		t.Fatalf("filtered = %+v, want just %q", m.filtered, "build")
+	}
+}
+
+func TestNewModel_FilterIsCaseInsensitive(t *testing.T) {
+	m := newModel("BUI", testStore(t), testStyles())
+
+	if len(m.filtered) != 1 || m.filtered[0].Name != "build" {
+		t.Fatalf("filtered = %+v, want just %q", m.filtered, "build")
+	}
+}
+
+func TestNewModel_FilterRequiresContiguousSubstringNotFuzzySubsequence(t *testing.T) {
+	// "bd" is a fuzzy subsequence of "build" (b, then d) but not a
+	// substring of it - the whole typed sequence has to appear
+	// together, letters can't be scattered across the name.
+	m := newModel("bd", testStore(t), testStyles())
+
+	if len(m.filtered) != 0 {
+		t.Fatalf("filtered = %+v, want none: %q is not a contiguous substring of any entry name", m.filtered, "bd")
 	}
 }
 
@@ -822,5 +842,147 @@ func TestDelete_CtrlDOnEmptyFilteredListIsNoop(t *testing.T) {
 
 	if m.mode != modeList {
 		t.Fatalf("mode = %v, want modeList to stay when there is nothing to remove", m.mode)
+	}
+}
+
+// --- Terminal width handling ---
+//
+// A value longer than the terminal is wide must word-wrap onto
+// extra rows of its own - like any other long line in the terminal
+// - rather than scroll horizontally or overflow onto the terminal's
+// next row (which would throw off the row math below it: help text,
+// cursor Y).
+
+func TestWidth_WindowSizeConstrainsFilterInput(t *testing.T) {
+	m := newModel("", testStore(t), testStyles())
+
+	m, _ = update(m, tea.WindowSizeMsg{Width: 20, Height: 24})
+
+	if got, want := m.input.Width(), 20-lipgloss.Width(m.input.Prompt); got != want {
+		t.Fatalf("input.Width() = %d, want %d", got, want)
+	}
+}
+
+func TestWidth_AppliedToFormCreatedBeforeResize(t *testing.T) {
+	m := newModel("", testStore(t), testStyles())
+
+	m, _ = update(m, ctrlKey('a')) // form created while width is still unknown
+	m, _ = update(m, tea.WindowSizeMsg{Width: 20, Height: 24})
+
+	if got, want := m.form.Width(), 20-lipgloss.Width(m.form.Prompt); got != want {
+		t.Fatalf("form.Width() = %d, want %d", got, want)
+	}
+}
+
+func TestWidth_PersistsAcrossFormReplacement(t *testing.T) {
+	m := newModel("", testStore(t), testStyles())
+
+	m, _ = update(m, tea.WindowSizeMsg{Width: 20, Height: 24})
+	m, _ = update(m, ctrlKey('a'))
+	m = typeString(m, "deploy")
+	m, _ = update(m, key(tea.KeyEnter)) // modeAddName -> modeAddValue replaces m.form
+
+	if m.mode != modeAddValue {
+		t.Fatalf("mode = %v, want modeAddValue (pendingErr=%q)", m.mode, m.pendingErr)
+	}
+	if got, want := m.form.Width(), 20-lipgloss.Width(m.form.Prompt); got != want {
+		t.Fatalf("form.Width() after replacement = %d, want %d (width was lost)", got, want)
+	}
+}
+
+func TestWidth_LongValueWrapsOntoMultipleRowsInsteadOfScrolling(t *testing.T) {
+	m := newModel("", testStore(t), testStyles())
+
+	m, _ = update(m, tea.WindowSizeMsg{Width: 40, Height: 24})
+	m, _ = update(m, ctrlKey('a'))
+	m = typeString(m, "deploy")
+	m, _ = update(m, key(tea.KeyEnter))
+
+	long := "sshpass -p 'memori' ssh -T -nC -o ServerAliveInterval=120 -L 5432:aclambda-postgresqldb.example.rds.amazonaws.com:5432 example.online"
+	m = typeString(m, long)
+
+	if rows := m.form.Height(); rows <= 1 {
+		t.Fatalf("form.Height() = %d, want >1 rows for a value much longer than the terminal", rows)
+	}
+
+	view := m.View().Content
+	for i, line := range strings.Split(view, "\n") {
+		if w := lipgloss.Width(line); w > 40 {
+			t.Fatalf("line %d rendered at width %d > terminal width 40: %q", i, w, line)
+		}
+	}
+
+	// The full value must still be held by the form, untruncated and
+	// unaltered by wrapping - wrapping is purely a rendering concern.
+	if got := m.form.Value(); got != long {
+		t.Fatalf("form.Value() = %q, want the full untruncated value %q", got, long)
+	}
+}
+
+func TestWidth_PromptOnlyShownOnFirstWrappedRow(t *testing.T) {
+	m := newModel("", testStore(t), testStyles())
+
+	m, _ = update(m, tea.WindowSizeMsg{Width: 40, Height: 24})
+	m, _ = update(m, ctrlKey('a'))
+	m = typeString(m, "deploy")
+	m, _ = update(m, key(tea.KeyEnter))
+	m = typeString(m, "sshpass -p 'memori' ssh -T -nC -o ServerAliveInterval=120 -L 5432:aclambda-postgresqldb.example.rds.amazonaws.com:5432 example.online")
+
+	if rows := m.form.Height(); rows <= 1 {
+		t.Fatalf("form.Height() = %d, want >1 rows for this test to be meaningful", rows)
+	}
+
+	lines := strings.Split(m.form.View(), "\n")
+	if got := strings.Count(lines[0], "> "); got != 1 {
+		t.Fatalf("first rendered row = %q, want exactly one %q", lines[0], "> ")
+	}
+	for i, line := range lines[1:] {
+		if strings.Contains(line, ">") {
+			t.Fatalf("continuation row %d = %q, want no prompt on wrap-continuation rows", i+1, line)
+		}
+	}
+}
+
+func TestWidth_FormShrinksBackToOneRowWhenValueIsEmptied(t *testing.T) {
+	m := newModel("", testStore(t), testStyles())
+
+	m, _ = update(m, tea.WindowSizeMsg{Width: 20, Height: 24})
+	m, _ = update(m, ctrlKey('a'))
+	m = typeString(m, "a very long name that will wrap across rows")
+
+	if rows := m.form.Height(); rows <= 1 {
+		t.Fatalf("form.Height() = %d, want >1 after typing a long name", rows)
+	}
+
+	for range "a very long name that will wrap across rows" {
+		m, _ = update(m, key(tea.KeyBackspace))
+	}
+
+	if rows := m.form.Height(); rows != 1 {
+		t.Fatalf("form.Height() = %d, want 1 after clearing the value", rows)
+	}
+}
+
+// PasteMsg can carry arbitrary clipboard content, including embedded
+// newlines; input/form must stay a single logical line regardless.
+
+func TestPaste_NewlinesInPastedFilterAreCollapsedToSpaces(t *testing.T) {
+	m := newModel("", testStore(t), testStyles())
+
+	m, _ = update(m, tea.PasteMsg{Content: "buil\nd"})
+
+	if got, want := m.input.Value(), "buil d"; got != want {
+		t.Fatalf("input.Value() = %q, want %q", got, want)
+	}
+}
+
+func TestPaste_NewlinesInPastedFormValueAreCollapsedToSpaces(t *testing.T) {
+	m := newModel("", testStore(t), testStyles())
+
+	m, _ = update(m, ctrlKey('a'))
+	m, _ = update(m, tea.PasteMsg{Content: "line one\nline two"})
+
+	if got, want := m.form.Value(), "line one line two"; got != want {
+		t.Fatalf("form.Value() = %q, want %q", got, want)
 	}
 }
