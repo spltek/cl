@@ -15,6 +15,9 @@ import (
 	"github.com/silvio/cl/internal/tui"
 )
 
+// version is set at build time via -ldflags "-X main.version=...".
+var version = "dev"
+
 func main() {
 	if err := run(os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, "cl: error:", err)
@@ -28,6 +31,10 @@ func run(args []string) error {
 	}
 
 	switch args[0] {
+	case "-v", "--version":
+		fmt.Println("cl", version)
+		return nil
+
 	case "-add":
 		if len(args) < 2 {
 			return fmt.Errorf("usage: cl -add <name>")

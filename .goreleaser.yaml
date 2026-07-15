@@ -1,0 +1,60 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+
+project_name: cl
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: cl
+    main: ./cmd/cl
+    binary: cl
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      # Windows on arm64 is not a supported target for this project.
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+
+archives:
+  - id: cl
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    # Kept lowercase/plain so install.sh and install.ps1 can build the
+    # exact same file name from `uname`/PowerShell-derived os/arch.
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^test:"
+      - "^chore:"
+      - "^docs:"
+
+release:
+  github:
+    owner: silviopola
+    name: cl
+  footer: >-
+    ## Install
+
+    See the [README](https://github.com/silviopola/cl#install) for install
+    script usage, or download the archive for your platform below.

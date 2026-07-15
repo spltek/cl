@@ -28,7 +28,27 @@ or `navi` use.
 
 ## Install
 
-Build from source (requires Go 1.21+):
+### From a release (macOS/Linux)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/silviopola/cl/main/install.sh | sh
+```
+
+Downloads the right binary for your OS/arch from the
+[latest release](https://github.com/silviopola/cl/releases) into
+`~/.local/bin` (override with `CL_INSTALL_DIR`).
+
+### From a release (Windows)
+
+```powershell
+iwr https://raw.githubusercontent.com/silviopola/cl/main/install.ps1 | iex
+```
+
+Installs into `%LOCALAPPDATA%\cl\bin` (override with `CL_INSTALL_DIR`).
+
+### From source
+
+Requires Go 1.21+:
 
 ```bash
 make build   # -> bin/cl
@@ -37,6 +57,21 @@ make build   # -> bin/cl
 Put the resulting `bin/cl` binary somewhere on your `PATH` (e.g.
 `~/.local/bin` or `/usr/local/bin`), or run `make install` to install
 it into `$GOPATH/bin`/`$GOBIN` via `go install`.
+
+### Releasing (maintainers)
+
+Releases are built and published automatically by
+[`.github/workflows/release.yml`](.github/workflows/release.yml) via
+[GoReleaser](https://goreleaser.com) whenever a `vX.Y.Z` tag is pushed:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+`.github/workflows/ci.yml` runs build/vet/test/gofmt on every push and
+pull request (Linux + Windows; macOS is covered locally by the
+maintainer to save Actions minutes on macOS runners).
 
 ## Development
 
