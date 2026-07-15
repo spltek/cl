@@ -8,14 +8,28 @@ had typed it yourself.
 
 ## How it works
 
-- `cl -add <name>` opens your editor to write/edit the command stored as `<name>`.
-- `cl -remove <name>` deletes a stored command.
-- `cl <filter>` opens an interactive picker: type to fuzzy-filter by
-  name, use the arrow keys to move, `Enter` to pick, `Esc`/`Ctrl-C` to
-  cancel.
+Everything happens inside a single interactive picker — there's no
+separate "add"/"remove" subcommand to remember:
+
+- `cl` opens the picker; `cl <filter>` opens it pre-filtered.
+- Type to fuzzy-filter by name, use the arrow keys to move, `Enter`
+  to pick, `Esc`/`Ctrl-C` to cancel.
+- `Ctrl+A` adds a new command: it first asks for a name (spaces are
+  allowed — there's no CLI token boundary to worry about anymore),
+  then, on `Enter`, asks for the shell command itself and saves it
+  immediately on the next `Enter`. There's no editor involved at any
+  point. A name that's already in use, or a name/command that's
+  empty (after trimming whitespace), is rejected in place with an
+  inline message so you can just try again.
+- `Ctrl+E` edits the highlighted command: its current value appears
+  pre-filled and editable; `Enter` asks "save?" (`y` saves, `Esc`/`n`
+  discards the edit and leaves the stored command untouched).
+- `Ctrl+R` removes the highlighted command, after a `y`/`N`
+  confirmation.
 - Commands are persisted as JSON in your user config directory
   (`~/Library/Application Support/cl` on macOS, `~/.config/cl` on
-  Linux, `%AppData%\cl` on Windows).
+  Linux, `%AppData%\cl` on Windows) — written to disk immediately as
+  each add/edit/remove is confirmed, not just when you quit.
 
 Picking a command from a plain binary invocation can't, by itself,
 write into your shell's input line — a child process has no way to
@@ -108,7 +122,7 @@ make cover        # run tests with coverage report
 make vet          # go vet
 make fmt          # gofmt -w .
 make fmt-check    # fail if any file is not gofmt-formatted
-make run ARGS="-add foo"  # build then run with the given args
+make run ARGS="foo"  # build then run with the given args
 make clean        # remove bin/ and dist/
 ```
 
@@ -152,26 +166,47 @@ Tries `[Microsoft.PowerShell.PSConsoleReadLine]::Insert()` (the same
 mechanism used by modules like PSFzf); if that's unavailable it falls
 back to an explicit `Run: <command>? [Y/n]` confirmation.
 
-## Editor used by `cl -add`
-
-`cl -add` needs an editor to let you write the command without
-worrying about your shell's own quoting rules. It picks one in this
-order:
-
-1. the `$EDITOR` environment variable, if set;
-2. a preference you've already chosen previously (saved automatically);
-3. otherwise it asks you once, interactively, and remembers your
-   answer in `config.json` next to `commands.json`.
-
 ## Example
 
-```bash
-$ cl -add build
-# editor opens, you type: npm run build -- --watch
+```
+$ cl
+cl>
+  no matching commands
+↑/↓ move
+enter select
+esc cancel
+ctrl+a add
+
+# press ctrl+a, type a name, enter, type the command, enter:
+
+Add command "build" - shell command:
+npm run build -- --watch
+enter save · esc cancel
+
+# back at the list:
 
 $ cl bui
 cl> bui
 > build  npm run build -- --watch
-↑/↓ move · enter select · esc cancel
+↑/↓ move
+enter select
+esc cancel
+ctrl+a add
+ctrl+e edit
+ctrl+r remove
 # Enter picks it, it appears on your prompt, Enter again runs it
+
+# press ctrl+e on "build" to edit it in place:
+
+Edit "build":
+npm run build -- --watch --fast
+enter continue · esc cancel
+# Enter then asks to confirm:
+Save "build" -> npm run build -- --watch --fast ? [y/N]
+y confirm · n/esc cancel
+
+# press ctrl+r on "build" to remove it:
+
+Remove "build" (npm run build -- --watch --fast) ? [y/N]
+y confirm · n/esc cancel
 ```

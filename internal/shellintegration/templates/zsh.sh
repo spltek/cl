@@ -3,13 +3,15 @@
 #   eval "$(cl init zsh)"
 #
 # This defines a `cl` function that shadows the `cl` binary on PATH.
-# Management commands (-add, -remove, init) are passed straight
-# through. Interactive selections are pushed into the editing buffer
-# of the *next* prompt via `print -z`, so the command appears
-# pre-filled and a second Enter runs it exactly as if typed by hand.
+# Informational commands are passed straight through so their output
+# prints normally instead of being captured and pushed into the
+# prompt buffer. Everything else opens the interactive picker, where
+# adding/editing/removing commands happens via ctrl+a/ctrl+e/ctrl+r -
+# that's the only invocation that needs the capture-and-inject dance
+# below.
 cl() {
   case "$1" in
-    -add|-remove|init)
+    init|-v|--version|-h|--help|help)
       command cl "$@"
       ;;
     *)

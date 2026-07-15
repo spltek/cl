@@ -50,5 +50,5 @@ clean: ## Remove build artifacts
 install: build ## Install the binary into $GOPATH/bin (or GOBIN)
 	go install $(CMD_PATH)
 
-run: build ## Build then run the binary, forwarding extra args (make run ARGS="-add foo")
+run: build ## Build then run the binary, forwarding extra args (make run ARGS="foo")
 	./$(BIN_DIR)/$(BINARY_NAME) $(ARGS)
