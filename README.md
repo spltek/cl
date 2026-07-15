@@ -273,3 +273,7 @@ y confirm · n/esc cancel
 Delete "release" (npm run build -- --watch --fast) ? [y/N]
 y confirm · n/esc cancel
 ```
+
+## License
+
+[MIT](LICENSE)
