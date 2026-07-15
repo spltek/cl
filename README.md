@@ -36,7 +36,12 @@ curl -fsSL https://raw.githubusercontent.com/silviopola/cl/main/install.sh | sh
 
 Downloads the right binary for your OS/arch from the
 [latest release](https://github.com/silviopola/cl/releases) into
-`~/.local/bin` (override with `CL_INSTALL_DIR`).
+`~/.local/bin` (override with `CL_INSTALL_DIR`), and **automatically
+wires up shell integration** for every shell it finds on the system
+(`~/.zshrc`, `~/.bashrc`, and `~/.bash_profile` if present) — open a
+new terminal afterwards and `cl` works immediately, no manual editing
+needed. Re-running the installer is safe; it never adds the same line
+twice.
 
 ### From a release (Windows)
 
@@ -44,7 +49,27 @@ Downloads the right binary for your OS/arch from the
 iwr https://raw.githubusercontent.com/silviopola/cl/main/install.ps1 | iex
 ```
 
-Installs into `%LOCALAPPDATA%\cl\bin` (override with `CL_INSTALL_DIR`).
+Installs into `%LOCALAPPDATA%\cl\bin` (override with `CL_INSTALL_DIR`),
+persists it on your **User**-scope `PATH`, and adds the integration
+line to your PowerShell profile (`$PROFILE`) automatically.
+
+#### Special permissions?
+
+None of the above needs admin/elevated rights: installing into
+`~/.local/bin` / `%LOCALAPPDATA%`, editing your own shell rc files,
+and setting the **User**-scope `PATH` (as opposed to Machine-scope)
+are all plain per-user operations. The installer also clears the
+macOS quarantine flag defensively (harmless if absent, no `sudo`
+needed since it's your own file).
+
+The one real gotcha is Windows-specific: if your PowerShell execution
+policy resolves to `Restricted` or `AllSigned`, your `$PROFILE` script
+won't run at all (this predates and is unrelated to `cl`), so the
+added integration line would silently never execute. The installer
+detects this and prints a warning with the exact command to fix it
+(`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`) — it
+deliberately does not change this policy itself, since it's a
+security setting you should opt into consciously.
 
 ### From source
 
