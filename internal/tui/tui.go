@@ -161,8 +161,8 @@ type model struct {
 
 	// placeholder-filling state (modeFillPlaceholders).
 	placeholders []placeholder // parsed from the selected command
-	phIdx        int            // which placeholder is currently being filled
-	phVals       []string       // values entered so far (index-aligned with placeholders)
+	phIdx        int           // which placeholder is currently being filled
+	phVals       []string      // values entered so far (index-aligned with placeholders)
 }
 
 func newModel(initialFilter string, st *store.Store, cfg *store.Config, sty styles) model {
