@@ -82,13 +82,21 @@ func Load() (*Store, error) {
 // Save writes the current dictionary to disk atomically (write to a
 // temp file, then rename) to avoid corrupting the file on crash.
 func (s *Store) Save() error {
-	data, err := json.MarshalIndent(s.commands, "", "  ")
+	return writeJSONAtomic(s.path, s.commands)
+}
+
+// writeJSONAtomic marshals v as indented JSON and writes it to path
+// atomically (write to a temp file in the same directory, then
+// rename over the destination) to avoid ever leaving a corrupt file
+// behind on crash. Shared by Store.Save and Config.Save.
+func writeJSONAtomic(path string, v any) error {
+	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
-		return fmt.Errorf("marshal commands: %w", err)
+		return fmt.Errorf("marshal: %w", err)
 	}
 
-	dir := filepath.Dir(s.path)
-	tmp, err := os.CreateTemp(dir, "commands-*.json.tmp")
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, filepath.Base(path)+"-*.tmp")
 	if err != nil {
 		return fmt.Errorf("create temp file: %w", err)
 	}
@@ -103,8 +111,8 @@ func (s *Store) Save() error {
 		return fmt.Errorf("close temp file: %w", err)
 	}
 
-	if err := os.Rename(tmpPath, s.path); err != nil {
-		return fmt.Errorf("rename temp file to %q: %w", s.path, err)
+	if err := os.Rename(tmpPath, path); err != nil {
+		return fmt.Errorf("rename temp file to %q: %w", path, err)
 	}
 
 	return nil

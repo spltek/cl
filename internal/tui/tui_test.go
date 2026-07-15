@@ -53,6 +53,22 @@ func emptyStore(t *testing.T) *store.Store {
 	return s
 }
 
+// testConfig returns a *store.Config backed by its own temporary
+// config dir, with every setting at its default (showCommand:
+// false).
+func testConfig(t *testing.T) *store.Config {
+	t.Helper()
+
+	t.Setenv("CL_CONFIG_DIR", t.TempDir())
+
+	c, err := store.LoadConfig()
+	if err != nil {
+		t.Fatalf("store.LoadConfig() error = %v", err)
+	}
+
+	return c
+}
+
 // testStyles returns a styles value suitable for tests, which don't
 // care about actual color output.
 func testStyles() styles {
@@ -90,7 +106,7 @@ func typeString(m model, s string) model {
 }
 
 func TestNewModel_NoFilterShowsAllEntries(t *testing.T) {
-	m := newModel("", testStore(t), testStyles())
+	m := newModel("", testStore(t), testConfig(t), testStyles())
 
 	if len(m.filtered) != 3 {
 		t.Fatalf("filtered len = %d, want 3", len(m.filtered))
@@ -98,7 +114,7 @@ func TestNewModel_NoFilterShowsAllEntries(t *testing.T) {
 }
 
 func TestNewModel_FilterNarrowsByName(t *testing.T) {
-	m := newModel("bui", testStore(t), testStyles())
+	m := newModel("bui", testStore(t), testConfig(t), testStyles())
 
 	if len(m.filtered) != 1 || m.filtered[0].Name != "build" {
 		t.Fatalf("filtered = %+v, want just %q", m.filtered, "build")
@@ -106,7 +122,7 @@ func TestNewModel_FilterNarrowsByName(t *testing.T) {
 }
 
 func TestNewModel_FilterIsCaseInsensitive(t *testing.T) {
-	m := newModel("BUI", testStore(t), testStyles())
+	m := newModel("BUI", testStore(t), testConfig(t), testStyles())
 
 	if len(m.filtered) != 1 || m.filtered[0].Name != "build" {
 		t.Fatalf("filtered = %+v, want just %q", m.filtered, "build")
@@ -117,7 +133,7 @@ func TestNewModel_FilterRequiresContiguousSubstringNotFuzzySubsequence(t *testin
 	// "bd" is a fuzzy subsequence of "build" (b, then d) but not a
 	// substring of it - the whole typed sequence has to appear
 	// together, letters can't be scattered across the name.
-	m := newModel("bd", testStore(t), testStyles())
+	m := newModel("bd", testStore(t), testConfig(t), testStyles())
 
 	if len(m.filtered) != 0 {
 		t.Fatalf("filtered = %+v, want none: %q is not a contiguous substring of any entry name", m.filtered, "bd")
@@ -125,7 +141,7 @@ func TestNewModel_FilterRequiresContiguousSubstringNotFuzzySubsequence(t *testin
 }
 
 func TestUpdate_ArrowKeysMoveCursorWithinBounds(t *testing.T) {
-	m := newModel("", testStore(t), testStyles())
+	m := newModel("", testStore(t), testConfig(t), testStyles())
 
 	// Moving up from the first row should have no effect.
 	m, _ = update(m, key(tea.KeyUp))
@@ -148,12 +164,15 @@ func TestUpdate_ArrowKeysMoveCursorWithinBounds(t *testing.T) {
 }
 
 func TestUpdate_EnterSelectsHighlightedCommand(t *testing.T) {
-	m := newModel("clean", testStore(t), testStyles())
+	m := newModel("clean", testStore(t), testConfig(t), testStyles())
 
 	m, cmd := update(m, key(tea.KeyEnter))
 
-	if m.selected != "rm -rf dist" {
-		t.Fatalf("selected = %q, want %q", m.selected, "rm -rf dist")
+	if m.selected.Command != "rm -rf dist" {
+		t.Fatalf("selected.Command = %q, want %q", m.selected.Command, "rm -rf dist")
+	}
+	if m.selected.Name != "cleanup" {
+		t.Fatalf("selected.Name = %q, want %q", m.selected.Name, "cleanup")
 	}
 	if !m.quitting {
 		t.Fatalf("quitting = false, want true after Enter")
@@ -164,12 +183,12 @@ func TestUpdate_EnterSelectsHighlightedCommand(t *testing.T) {
 }
 
 func TestUpdate_EscCancelsWithoutSelection(t *testing.T) {
-	m := newModel("build", testStore(t), testStyles())
+	m := newModel("build", testStore(t), testConfig(t), testStyles())
 
 	m, cmd := update(m, key(tea.KeyEsc))
 
-	if m.selected != "" {
-		t.Fatalf("selected = %q, want empty after Esc", m.selected)
+	if m.selected != (store.Entry{}) {
+		t.Fatalf("selected = %+v, want zero value after Esc", m.selected)
 	}
 	if !m.quitting {
 		t.Fatalf("quitting = false, want true after Esc")
@@ -180,7 +199,7 @@ func TestUpdate_EscCancelsWithoutSelection(t *testing.T) {
 }
 
 func TestUpdate_TypingNarrowsFilterAndResetsCursor(t *testing.T) {
-	m := newModel("", testStore(t), testStyles())
+	m := newModel("", testStore(t), testConfig(t), testStyles())
 
 	m, _ = update(m, key(tea.KeyDown))
 	if m.cursor != 1 {
@@ -201,7 +220,7 @@ func TestUpdate_TypingNarrowsFilterAndResetsCursor(t *testing.T) {
 
 func TestAdd_CtrlAEntersAddNameModeEvenOnEmptyList(t *testing.T) {
 	st := emptyStore(t)
-	m := newModel("", st, testStyles())
+	m := newModel("", st, testConfig(t), testStyles())
 
 	if len(m.filtered) != 0 {
 		t.Fatalf("filtered len = %d, want 0 for an empty store", len(m.filtered))
@@ -215,7 +234,7 @@ func TestAdd_CtrlAEntersAddNameModeEvenOnEmptyList(t *testing.T) {
 
 func TestAdd_FullFlowPersistsToStore(t *testing.T) {
 	st := testStore(t)
-	m := newModel("", st, testStyles())
+	m := newModel("", st, testConfig(t), testStyles())
 
 	m, _ = update(m, ctrlKey('a'))
 	if m.mode != modeAddName {
@@ -256,7 +275,7 @@ func TestAdd_FullFlowPersistsToStore(t *testing.T) {
 
 func TestAdd_NameCanContainSpaces(t *testing.T) {
 	st := testStore(t)
-	m := newModel("", st, testStyles())
+	m := newModel("", st, testConfig(t), testStyles())
 
 	m, _ = update(m, ctrlKey('a'))
 	m = typeString(m, "my build")
@@ -268,7 +287,7 @@ func TestAdd_NameCanContainSpaces(t *testing.T) {
 }
 
 func TestAdd_EmptyNameShowsErrorAndStaysInAddName(t *testing.T) {
-	m := newModel("", testStore(t), testStyles())
+	m := newModel("", testStore(t), testConfig(t), testStyles())
 
 	m, _ = update(m, ctrlKey('a'))
 	m = typeString(m, "   ") // whitespace-only, should trim to empty
@@ -283,7 +302,7 @@ func TestAdd_EmptyNameShowsErrorAndStaysInAddName(t *testing.T) {
 }
 
 func TestAdd_DuplicateNameShowsErrorAndStaysInAddName(t *testing.T) {
-	m := newModel("", testStore(t), testStyles())
+	m := newModel("", testStore(t), testConfig(t), testStyles())
 
 	m, _ = update(m, ctrlKey('a'))
 	m = typeString(m, "build") // already exists in testEntries()
@@ -299,7 +318,7 @@ func TestAdd_DuplicateNameShowsErrorAndStaysInAddName(t *testing.T) {
 
 func TestAdd_EmptyCommandShowsErrorAndStaysInAddValue(t *testing.T) {
 	st := testStore(t)
-	m := newModel("", st, testStyles())
+	m := newModel("", st, testConfig(t), testStyles())
 
 	m, _ = update(m, ctrlKey('a'))
 	m = typeString(m, "newcmd")
@@ -323,7 +342,7 @@ func TestAdd_EmptyCommandShowsErrorAndStaysInAddValue(t *testing.T) {
 }
 
 func TestAdd_EscFromAddNameDiscardsAndReturnsToList(t *testing.T) {
-	m := newModel("", testStore(t), testStyles())
+	m := newModel("", testStore(t), testConfig(t), testStyles())
 
 	m, _ = update(m, ctrlKey('a'))
 	m = typeString(m, "whatever")
@@ -336,7 +355,7 @@ func TestAdd_EscFromAddNameDiscardsAndReturnsToList(t *testing.T) {
 
 func TestAdd_EscFromAddValueDiscardsWithoutSaving(t *testing.T) {
 	st := testStore(t)
-	m := newModel("", st, testStyles())
+	m := newModel("", st, testConfig(t), testStyles())
 
 	m, _ = update(m, ctrlKey('a'))
 	m = typeString(m, "newcmd")
@@ -356,7 +375,7 @@ func TestAdd_EscFromAddValueDiscardsWithoutSaving(t *testing.T) {
 // --- Edit flow (ctrl+e) ---
 
 func TestEdit_CtrlEPrefillsFormWithCurrentCommand(t *testing.T) {
-	m := newModel("build", testStore(t), testStyles())
+	m := newModel("build", testStore(t), testConfig(t), testStyles())
 
 	m, _ = update(m, ctrlKey('e'))
 
@@ -370,7 +389,7 @@ func TestEdit_CtrlEPrefillsFormWithCurrentCommand(t *testing.T) {
 
 func TestEdit_FullFlowPersistsAfterConfirm(t *testing.T) {
 	st := testStore(t)
-	m := newModel("build", st, testStyles())
+	m := newModel("build", st, testConfig(t), testStyles())
 
 	m, _ = update(m, ctrlKey('e'))
 	m = typeString(m, " --watch")
@@ -395,7 +414,7 @@ func TestEdit_FullFlowPersistsAfterConfirm(t *testing.T) {
 
 func TestEdit_DecliningConfirmationLeavesStoreUnchanged(t *testing.T) {
 	st := testStore(t)
-	m := newModel("build", st, testStyles())
+	m := newModel("build", st, testConfig(t), testStyles())
 
 	m, _ = update(m, ctrlKey('e'))
 	m = typeString(m, " --watch")
@@ -414,7 +433,7 @@ func TestEdit_DecliningConfirmationLeavesStoreUnchanged(t *testing.T) {
 
 func TestEdit_EscAtConfirmationLeavesStoreUnchanged(t *testing.T) {
 	st := testStore(t)
-	m := newModel("build", st, testStyles())
+	m := newModel("build", st, testConfig(t), testStyles())
 
 	m, _ = update(m, ctrlKey('e'))
 	m = typeString(m, " --watch")
@@ -432,7 +451,7 @@ func TestEdit_EscAtConfirmationLeavesStoreUnchanged(t *testing.T) {
 }
 
 func TestEdit_EscBeforeConfirmationSkipsConfirmationEntirely(t *testing.T) {
-	m := newModel("build", testStore(t), testStyles())
+	m := newModel("build", testStore(t), testConfig(t), testStyles())
 
 	m, _ = update(m, ctrlKey('e'))
 	m, _ = update(m, key(tea.KeyEsc))
@@ -444,7 +463,7 @@ func TestEdit_EscBeforeConfirmationSkipsConfirmationEntirely(t *testing.T) {
 
 func TestEdit_EmptyValueShowsErrorAndStaysInEditValue(t *testing.T) {
 	st := testStore(t)
-	m := newModel("build", st, testStyles())
+	m := newModel("build", st, testConfig(t), testStyles())
 
 	m, _ = update(m, ctrlKey('e'))
 
@@ -469,7 +488,7 @@ func TestEdit_EmptyValueShowsErrorAndStaysInEditValue(t *testing.T) {
 }
 
 func TestEdit_CtrlEOnEmptyFilteredListIsNoop(t *testing.T) {
-	m := newModel("does-not-exist", testStore(t), testStyles())
+	m := newModel("does-not-exist", testStore(t), testConfig(t), testStyles())
 	if len(m.filtered) != 0 {
 		t.Fatalf("filtered len = %d, want 0", len(m.filtered))
 	}
@@ -484,7 +503,7 @@ func TestEdit_CtrlEOnEmptyFilteredListIsNoop(t *testing.T) {
 // --- Rename flow (ctrl+r) ---
 
 func TestRename_CtrlRPrefillsFormWithCurrentName(t *testing.T) {
-	m := newModel("build", testStore(t), testStyles())
+	m := newModel("build", testStore(t), testConfig(t), testStyles())
 
 	m, _ = update(m, ctrlKey('r'))
 
@@ -498,7 +517,7 @@ func TestRename_CtrlRPrefillsFormWithCurrentName(t *testing.T) {
 
 func TestRename_FullFlowPersistsAfterConfirm(t *testing.T) {
 	st := testStore(t)
-	m := newModel("build", st, testStyles())
+	m := newModel("build", st, testConfig(t), testStyles())
 
 	m, _ = update(m, ctrlKey('r'))
 	for range "build" {
@@ -527,7 +546,7 @@ func TestRename_FullFlowPersistsAfterConfirm(t *testing.T) {
 }
 
 func TestRename_DuplicateNameShowsErrorAndStaysInRenameName(t *testing.T) {
-	m := newModel("build", testStore(t), testStyles())
+	m := newModel("build", testStore(t), testConfig(t), testStyles())
 
 	m, _ = update(m, ctrlKey('r'))
 	for range "build" {
@@ -546,7 +565,7 @@ func TestRename_DuplicateNameShowsErrorAndStaysInRenameName(t *testing.T) {
 
 func TestRename_ToSameNameIsAllowed(t *testing.T) {
 	st := testStore(t)
-	m := newModel("build", st, testStyles())
+	m := newModel("build", st, testConfig(t), testStyles())
 
 	m, _ = update(m, ctrlKey('r'))
 	m, _ = update(m, key(tea.KeyEnter)) // resubmit the prefilled, unchanged name
@@ -564,7 +583,7 @@ func TestRename_ToSameNameIsAllowed(t *testing.T) {
 }
 
 func TestRename_EmptyNameShowsErrorAndStaysInRenameName(t *testing.T) {
-	m := newModel("build", testStore(t), testStyles())
+	m := newModel("build", testStore(t), testConfig(t), testStyles())
 
 	m, _ = update(m, ctrlKey('r'))
 	for range "build" {
@@ -583,7 +602,7 @@ func TestRename_EmptyNameShowsErrorAndStaysInRenameName(t *testing.T) {
 
 func TestRename_DecliningConfirmationLeavesStoreUnchanged(t *testing.T) {
 	st := testStore(t)
-	m := newModel("build", st, testStyles())
+	m := newModel("build", st, testConfig(t), testStyles())
 
 	m, _ = update(m, ctrlKey('r'))
 	for range "build" {
@@ -602,7 +621,7 @@ func TestRename_DecliningConfirmationLeavesStoreUnchanged(t *testing.T) {
 }
 
 func TestRename_CtrlROnEmptyFilteredListIsNoop(t *testing.T) {
-	m := newModel("does-not-exist", testStore(t), testStyles())
+	m := newModel("does-not-exist", testStore(t), testConfig(t), testStyles())
 	if len(m.filtered) != 0 {
 		t.Fatalf("filtered len = %d, want 0", len(m.filtered))
 	}
@@ -617,7 +636,7 @@ func TestRename_CtrlROnEmptyFilteredListIsNoop(t *testing.T) {
 // --- Delete flow (ctrl+d) ---
 
 func TestDelete_CtrlDEntersConfirmDeleteForHighlightedEntry(t *testing.T) {
-	m := newModel("build", testStore(t), testStyles())
+	m := newModel("build", testStore(t), testConfig(t), testStyles())
 
 	m, _ = update(m, ctrlKey('d'))
 
@@ -631,7 +650,7 @@ func TestDelete_CtrlDEntersConfirmDeleteForHighlightedEntry(t *testing.T) {
 
 func TestDelete_ConfirmingRemovesFromStore(t *testing.T) {
 	st := testStore(t)
-	m := newModel("build", st, testStyles())
+	m := newModel("build", st, testConfig(t), testStyles())
 
 	m, _ = update(m, ctrlKey('d'))
 	m, _ = update(m, runeKey('y'))
@@ -651,7 +670,7 @@ func TestDelete_ConfirmingRemovesFromStore(t *testing.T) {
 
 func TestDelete_DecliningLeavesStoreUnchanged(t *testing.T) {
 	st := testStore(t)
-	m := newModel("build", st, testStyles())
+	m := newModel("build", st, testConfig(t), testStyles())
 
 	m, _ = update(m, ctrlKey('d'))
 	m, _ = update(m, runeKey('n'))
@@ -666,7 +685,7 @@ func TestDelete_DecliningLeavesStoreUnchanged(t *testing.T) {
 
 func TestDelete_EscDeclinesLeavesStoreUnchanged(t *testing.T) {
 	st := testStore(t)
-	m := newModel("build", st, testStyles())
+	m := newModel("build", st, testConfig(t), testStyles())
 
 	m, _ = update(m, ctrlKey('d'))
 	m, _ = update(m, key(tea.KeyEsc))
@@ -679,6 +698,76 @@ func TestDelete_EscDeclinesLeavesStoreUnchanged(t *testing.T) {
 	}
 }
 
+// --- showCommand toggle (ctrl+s) ---
+
+func TestShowCommand_DefaultsToFalse(t *testing.T) {
+	m := newModel("", testStore(t), testConfig(t), testStyles())
+
+	if m.cfg.ShowCommand() {
+		t.Fatalf("ShowCommand() = true, want false by default")
+	}
+	if strings.Contains(m.View().Content, "npm run build") {
+		t.Fatalf("View() = %q, want it not to show command values by default", m.View().Content)
+	}
+}
+
+func TestShowCommand_CtrlSTogglesAndPersistsSetting(t *testing.T) {
+	cfg := testConfig(t)
+	m := newModel("build", testStore(t), cfg, testStyles())
+
+	m, _ = update(m, ctrlKey('s'))
+	if !m.cfg.ShowCommand() {
+		t.Fatalf("ShowCommand() after ctrl+s = false, want true")
+	}
+	if !cfg.ShowCommand() {
+		t.Fatalf("the underlying store.Config was not persisted (Save wasn't called, or cfg isn't shared)")
+	}
+	if m.pendingErr != "" {
+		t.Fatalf("pendingErr = %q, want empty after a successful toggle", m.pendingErr)
+	}
+	if !strings.Contains(m.View().Content, "npm run build") {
+		t.Errorf("View() = %q, want it to show the command once ShowCommand is enabled", m.View().Content)
+	}
+
+	m, _ = update(m, ctrlKey('s'))
+	if m.cfg.ShowCommand() {
+		t.Fatalf("ShowCommand() after a second ctrl+s = true, want false")
+	}
+	if strings.Contains(m.View().Content, "npm run build") {
+		t.Errorf("View() = %q, want it to hide the command again after toggling back off", m.View().Content)
+	}
+}
+
+func TestShowCommand_ReloadedConfigReflectsPersistedToggle(t *testing.T) {
+	// Keep everything under a single, fixed config dir for this test
+	// - unlike testStore/testConfig, which each point CL_CONFIG_DIR
+	// at their own fresh temp dir, here the whole point is to reload
+	// from the very same directory ctrl+s just saved to.
+	t.Setenv("CL_CONFIG_DIR", t.TempDir())
+
+	st, err := store.Load()
+	if err != nil {
+		t.Fatalf("store.Load() error = %v", err)
+	}
+	st.Set("build", "npm run build")
+
+	cfg, err := store.LoadConfig()
+	if err != nil {
+		t.Fatalf("store.LoadConfig() error = %v", err)
+	}
+
+	m := newModel("build", st, cfg, testStyles())
+	m, _ = update(m, ctrlKey('s'))
+
+	reloaded, err := store.LoadConfig()
+	if err != nil {
+		t.Fatalf("store.LoadConfig() (reload) error = %v", err)
+	}
+	if !reloaded.ShowCommand() {
+		t.Fatalf("ShowCommand() on a freshly reloaded Config = false, want true after ctrl+s was saved")
+	}
+}
+
 // --- View rendering ---
 //
 // These don't need a real TTY: View() is a pure function of the
@@ -687,14 +776,14 @@ func TestDelete_EscDeclinesLeavesStoreUnchanged(t *testing.T) {
 // key messages.
 
 func TestView_Init_ReturnsNil(t *testing.T) {
-	m := newModel("", testStore(t), testStyles())
+	m := newModel("", testStore(t), testConfig(t), testStyles())
 	if cmd := m.Init(); cmd != nil {
 		t.Fatalf("Init() = %v, want nil", cmd)
 	}
 }
 
 func TestView_QuittingRendersEmptyString(t *testing.T) {
-	m := newModel("build", testStore(t), testStyles())
+	m := newModel("build", testStore(t), testConfig(t), testStyles())
 	m, _ = update(m, key(tea.KeyEnter))
 
 	if got := m.View().Content; got != "" {
@@ -703,12 +792,12 @@ func TestView_QuittingRendersEmptyString(t *testing.T) {
 }
 
 func TestView_ListShowsEntriesAndHelpWithoutCommands(t *testing.T) {
-	m := newModel("", testStore(t), testStyles())
+	m := newModel("", testStore(t), testConfig(t), testStyles())
 
 	view := m.View().Content
 	for _, want := range []string{
 		"backup", "build", "cleanup",
-		"ctrl+a", "add", "ctrl+e", "edit", "ctrl+r", "rename", "ctrl+d", "delete",
+		"ctrl+a", "add", "ctrl+s", "command show", "ctrl+e", "edit", "ctrl+r", "rename", "ctrl+d", "delete",
 	} {
 		if !strings.Contains(view, want) {
 			t.Errorf("View() = %q, want it to contain %q", view, want)
@@ -716,8 +805,31 @@ func TestView_ListShowsEntriesAndHelpWithoutCommands(t *testing.T) {
 	}
 }
 
+func TestView_ListHelpLinesAreInExpectedOrder(t *testing.T) {
+	m := newModel("", testStore(t), testConfig(t), testStyles())
+
+	help := m.listHelp()
+	wantOrder := []string{
+		"move", "run selected", "add new command",
+		"edit selected", "rename selected", "delete selected",
+		"command show toggle", "cancel",
+	}
+
+	lastIdx := -1
+	for _, want := range wantOrder {
+		idx := strings.Index(help, want)
+		if idx == -1 {
+			t.Fatalf("listHelp() = %q, want it to contain %q", help, want)
+		}
+		if idx < lastIdx {
+			t.Fatalf("listHelp() = %q, want %q to come after the previous item", help, want)
+		}
+		lastIdx = idx
+	}
+}
+
 func TestView_EmptyListOnlyMentionsAdd(t *testing.T) {
-	m := newModel("", emptyStore(t), testStyles())
+	m := newModel("", emptyStore(t), testConfig(t), testStyles())
 
 	view := m.View().Content
 	if !strings.Contains(view, "ctrl+a") || !strings.Contains(view, "add") {
@@ -732,7 +844,7 @@ func TestView_EmptyListOnlyMentionsAdd(t *testing.T) {
 }
 
 func TestView_AddNameShowsPromptAndForm(t *testing.T) {
-	m := newModel("", testStore(t), testStyles())
+	m := newModel("", testStore(t), testConfig(t), testStyles())
 	m, _ = update(m, ctrlKey('a'))
 	m = typeString(m, "deploy")
 
@@ -746,7 +858,7 @@ func TestView_AddNameShowsPromptAndForm(t *testing.T) {
 }
 
 func TestView_AddNameShowsInlineErrorOnDuplicate(t *testing.T) {
-	m := newModel("", testStore(t), testStyles())
+	m := newModel("", testStore(t), testConfig(t), testStyles())
 	m, _ = update(m, ctrlKey('a'))
 	m = typeString(m, "build")
 	m, _ = update(m, key(tea.KeyEnter))
@@ -758,7 +870,7 @@ func TestView_AddNameShowsInlineErrorOnDuplicate(t *testing.T) {
 }
 
 func TestView_AddValueShowsPendingName(t *testing.T) {
-	m := newModel("", testStore(t), testStyles())
+	m := newModel("", testStore(t), testConfig(t), testStyles())
 	m, _ = update(m, ctrlKey('a'))
 	m = typeString(m, "deploy")
 	m, _ = update(m, key(tea.KeyEnter))
@@ -770,7 +882,7 @@ func TestView_AddValueShowsPendingName(t *testing.T) {
 }
 
 func TestView_EditValueShowsTargetName(t *testing.T) {
-	m := newModel("build", testStore(t), testStyles())
+	m := newModel("build", testStore(t), testConfig(t), testStyles())
 	m, _ = update(m, ctrlKey('e'))
 
 	view := m.View().Content
@@ -780,7 +892,7 @@ func TestView_EditValueShowsTargetName(t *testing.T) {
 }
 
 func TestView_ConfirmSaveEditShowsOldNameAndNewValue(t *testing.T) {
-	m := newModel("build", testStore(t), testStyles())
+	m := newModel("build", testStore(t), testConfig(t), testStyles())
 	m, _ = update(m, ctrlKey('e'))
 	m = typeString(m, " --watch")
 	m, _ = update(m, key(tea.KeyEnter))
@@ -794,7 +906,7 @@ func TestView_ConfirmSaveEditShowsOldNameAndNewValue(t *testing.T) {
 }
 
 func TestView_RenameNameShowsTargetName(t *testing.T) {
-	m := newModel("build", testStore(t), testStyles())
+	m := newModel("build", testStore(t), testConfig(t), testStyles())
 	m, _ = update(m, ctrlKey('r'))
 
 	view := m.View().Content
@@ -804,7 +916,7 @@ func TestView_RenameNameShowsTargetName(t *testing.T) {
 }
 
 func TestView_ConfirmRenameShowsOldAndNewName(t *testing.T) {
-	m := newModel("build", testStore(t), testStyles())
+	m := newModel("build", testStore(t), testConfig(t), testStyles())
 	m, _ = update(m, ctrlKey('r'))
 	for range "build" {
 		m, _ = update(m, key(tea.KeyBackspace))
@@ -821,7 +933,7 @@ func TestView_ConfirmRenameShowsOldAndNewName(t *testing.T) {
 }
 
 func TestView_ConfirmDeleteShowsNameAndCommand(t *testing.T) {
-	m := newModel("build", testStore(t), testStyles())
+	m := newModel("build", testStore(t), testConfig(t), testStyles())
 	m, _ = update(m, ctrlKey('d'))
 
 	view := m.View().Content
@@ -833,7 +945,7 @@ func TestView_ConfirmDeleteShowsNameAndCommand(t *testing.T) {
 }
 
 func TestDelete_CtrlDOnEmptyFilteredListIsNoop(t *testing.T) {
-	m := newModel("does-not-exist", testStore(t), testStyles())
+	m := newModel("does-not-exist", testStore(t), testConfig(t), testStyles())
 	if len(m.filtered) != 0 {
 		t.Fatalf("filtered len = %d, want 0", len(m.filtered))
 	}
@@ -854,7 +966,7 @@ func TestDelete_CtrlDOnEmptyFilteredListIsNoop(t *testing.T) {
 // cursor Y).
 
 func TestWidth_WindowSizeConstrainsFilterInput(t *testing.T) {
-	m := newModel("", testStore(t), testStyles())
+	m := newModel("", testStore(t), testConfig(t), testStyles())
 
 	m, _ = update(m, tea.WindowSizeMsg{Width: 20, Height: 24})
 
@@ -864,7 +976,7 @@ func TestWidth_WindowSizeConstrainsFilterInput(t *testing.T) {
 }
 
 func TestWidth_AppliedToFormCreatedBeforeResize(t *testing.T) {
-	m := newModel("", testStore(t), testStyles())
+	m := newModel("", testStore(t), testConfig(t), testStyles())
 
 	m, _ = update(m, ctrlKey('a')) // form created while width is still unknown
 	m, _ = update(m, tea.WindowSizeMsg{Width: 20, Height: 24})
@@ -875,7 +987,7 @@ func TestWidth_AppliedToFormCreatedBeforeResize(t *testing.T) {
 }
 
 func TestWidth_PersistsAcrossFormReplacement(t *testing.T) {
-	m := newModel("", testStore(t), testStyles())
+	m := newModel("", testStore(t), testConfig(t), testStyles())
 
 	m, _ = update(m, tea.WindowSizeMsg{Width: 20, Height: 24})
 	m, _ = update(m, ctrlKey('a'))
@@ -891,7 +1003,7 @@ func TestWidth_PersistsAcrossFormReplacement(t *testing.T) {
 }
 
 func TestWidth_LongValueWrapsOntoMultipleRowsInsteadOfScrolling(t *testing.T) {
-	m := newModel("", testStore(t), testStyles())
+	m := newModel("", testStore(t), testConfig(t), testStyles())
 
 	m, _ = update(m, tea.WindowSizeMsg{Width: 40, Height: 24})
 	m, _ = update(m, ctrlKey('a'))
@@ -920,7 +1032,7 @@ func TestWidth_LongValueWrapsOntoMultipleRowsInsteadOfScrolling(t *testing.T) {
 }
 
 func TestWidth_PromptOnlyShownOnFirstWrappedRow(t *testing.T) {
-	m := newModel("", testStore(t), testStyles())
+	m := newModel("", testStore(t), testConfig(t), testStyles())
 
 	m, _ = update(m, tea.WindowSizeMsg{Width: 40, Height: 24})
 	m, _ = update(m, ctrlKey('a'))
@@ -944,7 +1056,7 @@ func TestWidth_PromptOnlyShownOnFirstWrappedRow(t *testing.T) {
 }
 
 func TestWidth_FormShrinksBackToOneRowWhenValueIsEmptied(t *testing.T) {
-	m := newModel("", testStore(t), testStyles())
+	m := newModel("", testStore(t), testConfig(t), testStyles())
 
 	m, _ = update(m, tea.WindowSizeMsg{Width: 20, Height: 24})
 	m, _ = update(m, ctrlKey('a'))
@@ -967,7 +1079,7 @@ func TestWidth_FormShrinksBackToOneRowWhenValueIsEmptied(t *testing.T) {
 // newlines; input/form must stay a single logical line regardless.
 
 func TestPaste_NewlinesInPastedFilterAreCollapsedToSpaces(t *testing.T) {
-	m := newModel("", testStore(t), testStyles())
+	m := newModel("", testStore(t), testConfig(t), testStyles())
 
 	m, _ = update(m, tea.PasteMsg{Content: "buil\nd"})
 
@@ -977,7 +1089,7 @@ func TestPaste_NewlinesInPastedFilterAreCollapsedToSpaces(t *testing.T) {
 }
 
 func TestPaste_NewlinesInPastedFormValueAreCollapsedToSpaces(t *testing.T) {
-	m := newModel("", testStore(t), testStyles())
+	m := newModel("", testStore(t), testConfig(t), testStyles())
 
 	m, _ = update(m, ctrlKey('a'))
 	m, _ = update(m, tea.PasteMsg{Content: "line one\nline two"})

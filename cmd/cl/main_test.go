@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -42,6 +44,69 @@ func TestRun_HelpFlagsSucceed(t *testing.T) {
 		if err := run(args); err != nil {
 			t.Errorf("run(%v) error = %v, want nil", args, err)
 		}
+	}
+}
+
+func TestPrintExecuting_AnnouncesTheEntryName(t *testing.T) {
+	var buf bytes.Buffer
+	printExecuting(&buf, "build")
+
+	got := buf.String()
+	if !strings.Contains(got, "> Execute") {
+		t.Fatalf("printExecuting output = %q, want it to contain %q", got, "> Execute")
+	}
+	if !strings.Contains(got, "build") {
+		t.Fatalf("printExecuting output = %q, want it to contain the entry name %q", got, "build")
+	}
+}
+
+func TestPrintExecuting_DropsColorOnANonTerminalWriter(t *testing.T) {
+	// buf isn't an *os.File, so colorprofile can't detect it as a
+	// terminal and must fall back to plain text - no escape codes.
+	var buf bytes.Buffer
+	printExecuting(&buf, "build")
+
+	if got := buf.String(); strings.Contains(got, "\x1b") {
+		t.Fatalf("printExecuting output = %q, want no ANSI escape codes for a non-terminal writer", got)
+	}
+}
+
+func TestShellCommand_UsesSHELLEnvVarOnUnix(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("this path only applies outside Windows")
+	}
+
+	t.Setenv("SHELL", "/bin/zsh")
+
+	path, args := shellCommand("echo hi")
+	if path != "/bin/zsh" || len(args) != 2 || args[0] != "-c" || args[1] != "echo hi" {
+		t.Fatalf("shellCommand(echo hi) = (%q, %v), want (%q, [-c, echo hi])", path, args, "/bin/zsh")
+	}
+}
+
+func TestShellCommand_DefaultsToBinShWhenSHELLUnsetOnUnix(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("this path only applies outside Windows")
+	}
+
+	t.Setenv("SHELL", "")
+
+	path, _ := shellCommand("echo hi")
+	if path != "/bin/sh" {
+		t.Fatalf("shellCommand(echo hi) path = %q, want %q", path, "/bin/sh")
+	}
+}
+
+func TestShellCommand_UsesComspecOnWindows(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("this path only applies on Windows")
+	}
+
+	t.Setenv("COMSPEC", `C:\Windows\System32\cmd.exe`)
+
+	path, args := shellCommand("echo hi")
+	if path != `C:\Windows\System32\cmd.exe` || len(args) != 2 || args[0] != "/C" || args[1] != "echo hi" {
+		t.Fatalf("shellCommand(echo hi) = (%q, %v), want ComSpec with /C", path, args)
 	}
 }
 

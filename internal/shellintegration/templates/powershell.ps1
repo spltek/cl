@@ -6,12 +6,15 @@
 # Informational commands are passed straight through so their output
 # prints normally instead of being captured. Everything else opens
 # the interactive picker, where adding/editing/renaming/deleting
-# commands happens via ctrl+a/ctrl+e/ctrl+r/ctrl+d. Interactive
-# picker selections try
-# to use PSReadLine's Insert() to pre-fill the next line (same
-# mechanism used by modules like PSFzf); if that is not available, it
-# falls back to an explicit confirmation prompt before running the
-# command.
+# commands happens via ctrl+a/ctrl+e/ctrl+r/ctrl+d, and ctrl+s toggles
+# whether commands are shown/hidden. With commands hidden (the
+# default), picking one runs it directly and the binary prints
+# nothing, so $out below is empty and there's nothing left to do.
+# With commands shown, the binary hands the picked command back on
+# stdout; this tries to use PSReadLine's Insert() to pre-fill the
+# next line (same mechanism used by modules like PSFzf); if that is
+# not available, it falls back to an explicit confirmation prompt
+# before running the command.
 function cl {
     $realCl = (Get-Command cl -CommandType Application | Select-Object -First 1 -ExpandProperty Source)
 

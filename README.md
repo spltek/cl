@@ -2,9 +2,13 @@
 
 A tiny personal command manager. `cl` stores a `name -> shell command`
 dictionary in a JSON file and lets you search it interactively from
-your terminal. Selecting a command writes it onto your shell prompt
-(not run yet) so a second Enter executes it exactly as if you had
-typed it yourself.
+your terminal. By default the command itself stays hidden — only
+names are shown — and picking one runs it immediately, without ever
+displaying its value. Toggle `Ctrl+S` in the picker to flip that: the
+command then shows next to its name, and picking it writes it onto
+your shell prompt instead (not run yet), so a second Enter executes
+it exactly as if you had typed it yourself. Either way, all output
+from a run command reaches your console normally.
 
 ## How it works
 
@@ -16,6 +20,17 @@ separate "add"/"remove" subcommand to remember:
   whole typed text has to appear together, not just its letters
   scattered anywhere in the name), use the arrow keys to move,
   `Enter` to pick, `Esc`/`Ctrl-C` to cancel.
+- `Ctrl+S` toggles whether the list shows each command next to its
+  name (persisted immediately, so it's remembered next time). This
+  also changes what `Enter` does with the highlighted command:
+    - **Hidden (the default):** the list only shows names; `Enter`
+      runs the command directly — you never see its value, but
+      `cl` announces `> Execute <name>` (the name in color) right
+      before running it, and its own output still prints to your
+      terminal normally.
+    - **Shown:** the list shows `name  command`; `Enter` hands the
+      command back to the shell integration to pre-fill on your
+      prompt instead, editable, with a second `Enter` to run it.
 - `Ctrl+A` adds a new command: it first asks for a name (spaces are
   allowed — there's no CLI token boundary to worry about anymore),
   then, on `Enter`, asks for the shell command itself and saves it
@@ -38,14 +53,17 @@ separate "add"/"remove" subcommand to remember:
   Linux, `%AppData%\cl` on Windows) — written to disk immediately as
   each add/edit/remove is confirmed, not just when you quit.
 
-Picking a command from a plain binary invocation can't, by itself,
-write into your shell's input line — a child process has no way to
-reach into its parent shell's editing buffer. That's why `cl` also
-ships shell integration: a small `cl` **function** that shadows the
-`cl` binary on your `PATH`, calls the real binary, and then hands the
-result back to the shell using whatever native mechanism is
-available (see below). This is the same pattern tools like `zoxide`
-or `navi` use.
+When a command is shown (`Ctrl+S`), picking it from a plain binary
+invocation can't, by itself, write into your shell's input line — a
+child process has no way to reach into its parent shell's editing
+buffer. That's why `cl` also ships shell integration: a small `cl`
+**function** that shadows the `cl` binary on your `PATH`, calls the
+real binary, and then hands the result back to the shell using
+whatever native mechanism is available (see below). This is the same
+pattern tools like `zoxide` or `navi` use. When a command is hidden
+(the default), `cl` runs it itself and there's nothing left to hand
+back — the shell integration is only needed for the "show" mode and
+for a couple of informational flags.
 
 ## Install
 
@@ -181,9 +199,10 @@ cl>
   no matching commands
 
 ↑/↓ move
-enter select
+enter run selected
+ctrl+a add new command
+ctrl+s command show toggle
 esc cancel
-ctrl+a add
 
 # press ctrl+a, type a name, enter, type the command, enter:
 
@@ -191,19 +210,44 @@ Add command "build" - shell command:
 npm run build -- --watch
 enter save · esc cancel
 
-# back at the list:
+# back at the list, command hidden (the default) - Enter runs it
+# directly, with its own output printing normally, and you never
+# see "npm run build -- --watch" itself:
+
+$ cl bui
+cl> bui
+> build
+
+↑/↓ move
+enter run selected
+ctrl+a add new command
+ctrl+e edit selected
+ctrl+r rename selected
+ctrl+d delete selected
+ctrl+s command show toggle
+esc cancel
+
+# press Enter on "build": cl announces the name (colored) before
+# running it, then the command's own output follows normally
+
+> Execute build
+...(build output)...
+
+# press ctrl+s to show commands instead - Enter now pre-fills your
+# prompt for a second Enter to run, rather than running immediately:
 
 $ cl bui
 cl> bui
 > build  npm run build -- --watch
 
 ↑/↓ move
-enter select
+enter run selected
+ctrl+a add new command
+ctrl+e edit selected
+ctrl+r rename selected
+ctrl+d delete selected
+ctrl+s command show toggle
 esc cancel
-ctrl+a add
-ctrl+e edit
-ctrl+r rename
-ctrl+d delete
 # Enter picks it, it appears on your prompt, Enter again runs it
 
 # press ctrl+e on "build" to edit it in place:

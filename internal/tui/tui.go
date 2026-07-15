@@ -126,14 +126,15 @@ const (
 )
 
 type model struct {
-	st *store.Store
+	st  *store.Store
+	cfg *store.Config
 
 	input    textarea.Model
 	all      []store.Entry
 	filtered []store.Entry
 	cursor   int
 	scroll   int
-	selected string
+	selected store.Entry
 	quitting bool
 	styles   styles
 
@@ -158,7 +159,7 @@ type model struct {
 	target       store.Entry
 }
 
-func newModel(initialFilter string, st *store.Store, sty styles) model {
+func newModel(initialFilter string, st *store.Store, cfg *store.Config, sty styles) model {
 	ti := newTextArea("cl> ", "type to filter...")
 	ti.SetValue(initialFilter)
 	ti.CursorEnd()
@@ -167,7 +168,7 @@ func newModel(initialFilter string, st *store.Store, sty styles) model {
 	// setForm), but it must still be a real textarea.Model - not the
 	// zero value - since applyWidth touches it unconditionally on
 	// every tea.WindowSizeMsg regardless of the current mode.
-	m := model{st: st, input: ti, form: newTextArea("> ", ""), styles: sty}
+	m := model{st: st, cfg: cfg, input: ti, form: newTextArea("> ", ""), styles: sty}
 	m.all = st.List()
 	m.refilter()
 
@@ -293,6 +294,20 @@ func (m *model) startDelete(e store.Entry) {
 	m.target = e
 }
 
+// toggleShowCommand flips and persists the showCommand setting,
+// which controls both whether the list shows each entry's command
+// next to its name and what Enter does with the highlighted entry
+// (hand it back to pre-fill the prompt vs. run it directly) - see
+// store.Config.
+func (m *model) toggleShowCommand() {
+	m.cfg.SetShowCommand(!m.cfg.ShowCommand())
+	if err := m.cfg.Save(); err != nil {
+		m.pendingErr = fmt.Sprintf("save failed: %v", err)
+		return
+	}
+	m.pendingErr = ""
+}
+
 func (m model) Init() tea.Cmd {
 	return nil
 }
@@ -321,8 +336,12 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "enter":
+			// What the caller does with m.selected once Run returns
+			// - hand it back to the shell to pre-fill, or run it
+			// directly - depends on cfg.ShowCommand; it's the same
+			// either way from here.
 			if len(m.filtered) > 0 {
-				m.selected = m.filtered[m.cursor].Command
+				m.selected = m.filtered[m.cursor]
 			}
 			m.quitting = true
 			return m, tea.Quit
@@ -365,6 +384,10 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(m.filtered) > 0 {
 				m.startDelete(m.filtered[m.cursor])
 			}
+			return m, nil
+
+		case "ctrl+s":
+			m.toggleShowCommand()
 			return m, nil
 		}
 	}
@@ -550,7 +573,10 @@ func (m model) viewList() tea.View {
 
 	for i := m.scroll; i < end; i++ {
 		entry := m.filtered[i]
-		line := fmt.Sprintf("%s  %s", entry.Name, m.styles.command.Render(entry.Command))
+		line := entry.Name
+		if m.cfg.ShowCommand() {
+			line = fmt.Sprintf("%s  %s", entry.Name, m.styles.command.Render(entry.Command))
+		}
 		if i == m.cursor {
 			line = m.styles.selected.Render("> " + line)
 		} else {
@@ -562,6 +588,11 @@ func (m model) viewList() tea.View {
 
 	if len(m.filtered) == 0 {
 		b.WriteString(m.styles.help.Render("  no matching commands"))
+		b.WriteString("\n")
+	}
+
+	if m.pendingErr != "" {
+		b.WriteString(m.wrapStyled(m.styles.errMsg, m.pendingErr))
 		b.WriteString("\n")
 	}
 
@@ -578,17 +609,20 @@ func (m model) viewList() tea.View {
 func (m model) listHelp() string {
 	items := [][2]string{
 		{"↑/↓", "move"},
-		{"enter", "select"},
-		{"esc", "cancel"},
-		{"ctrl+a", "add"},
+		{"enter", "run selected"},
+		{"ctrl+a", "add new command"},
 	}
 	if len(m.filtered) != 0 {
 		items = append(items,
-			[2]string{"ctrl+e", "edit"},
-			[2]string{"ctrl+r", "rename"},
-			[2]string{"ctrl+d", "delete"},
+			[2]string{"ctrl+e", "edit selected"},
+			[2]string{"ctrl+r", "rename selected"},
+			[2]string{"ctrl+d", "delete selected"},
 		)
 	}
+	items = append(items,
+		[2]string{"ctrl+s", "command show toggle"},
+		[2]string{"esc", "cancel"},
+	)
 
 	lines := make([]string, len(items))
 	for i, kv := range items {
@@ -638,30 +672,35 @@ func (m model) viewConfirm(prompt string) string {
 }
 
 // Run displays the interactive picker seeded with initialFilter and
-// returns the shell command chosen by the user, or "" if the user
-// cancelled the selection. Add/edit/rename/delete sub-flows persist
-// to st immediately as they're confirmed, independently of the
-// final selection.
-func Run(initialFilter string, st *store.Store) (string, error) {
+// returns the entry chosen by the user, or the zero store.Entry
+// ({}) if the user cancelled the selection. Add/edit/rename/delete
+// sub-flows persist to st immediately as they're confirmed,
+// independently of the final selection. cfg.ShowCommand (toggled
+// in-picker with ctrl+s, persisted immediately) controls whether the
+// list shows each entry's command next to its name; it's up to the
+// caller to decide what to do with the returned entry based on the
+// same setting - hand its command back to the shell to pre-fill, or
+// run it directly.
+func Run(initialFilter string, st *store.Store, cfg *store.Config) (store.Entry, error) {
 	ttyIn, ttyOut, err := tea.OpenTTY()
 	if err != nil {
-		return "", fmt.Errorf("open controlling terminal: %w", err)
+		return store.Entry{}, fmt.Errorf("open controlling terminal: %w", err)
 	}
 	defer ttyIn.Close()
 	defer ttyOut.Close()
 
-	m := newModel(initialFilter, st, newStyles())
+	m := newModel(initialFilter, st, cfg, newStyles())
 
 	p := tea.NewProgram(m, tea.WithInput(ttyIn), tea.WithOutput(ttyOut))
 
 	final, err := p.Run()
 	if err != nil {
-		return "", err
+		return store.Entry{}, err
 	}
 
 	fm, ok := final.(model)
 	if !ok {
-		return "", fmt.Errorf("unexpected model type")
+		return store.Entry{}, fmt.Errorf("unexpected model type")
 	}
 
 	return fm.selected, nil
