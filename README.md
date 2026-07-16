@@ -2,6 +2,11 @@
 
 <img src="media/cl.png" alt="cl screenshot" width="100%" />
 
+> *I've watched the up arrow fire in the dark, hunting through history for a command lost three weeks and a thousand keystrokes ago.  
+> All those commands, scattered across gists, notes, and files no one will ever open again.  
+> All those moments will be lost in time… like uncommitted changes before a force push.  
+> Time to launch.*
+
 A tiny personal command launcher. `cl` stores a `name -> shell command`
 dictionary in a JSON file and lets you search it interactively from
 your terminal. By default the command itself stays hidden — only
