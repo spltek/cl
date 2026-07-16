@@ -50,7 +50,7 @@ brews:
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     directory: Formula
     homepage: "https://github.com/silviopola/cl"
-    description: "A tiny personal command manager with an interactive picker"
+    description: "A tiny personal command launcher with an interactive picker"
     license: "MIT"
     test: |
       system "#{bin}/cl", "-v"

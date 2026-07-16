@@ -1,4 +1,4 @@
-// Command cl is a personal command-list manager: it persists a
+// Command cl is a personal command launcher: it persists a
 // name -> shell command dictionary and lets you search it
 // interactively. Adding, editing, renaming and deleting commands all
 // happen inside the interactive picker itself
@@ -154,7 +154,7 @@ func shellCommand(command string) (string, []string) {
 }
 
 func printUsage() {
-	fmt.Println(`cl - a personal command-list manager
+	fmt.Println(`cl - a personal command launcher
 
 Usage:
   cl                  Open the interactive picker

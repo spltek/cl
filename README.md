@@ -1,6 +1,6 @@
-# cl — command list
+# cl — command launcher
 
-A tiny personal command manager. `cl` stores a `name -> shell command`
+A tiny personal command launcher. `cl` stores a `name -> shell command`
 dictionary in a JSON file and lets you search it interactively from
 your terminal. By default the command itself stays hidden — only
 names are shown — so you can run it without ever seeing its value.
