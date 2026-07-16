@@ -97,7 +97,7 @@ the install command above can execute.
 
 ### From source
 
-Requires Go 1.21+:
+Requires Go 1.25+:
 
 ```bash
 make install-local
