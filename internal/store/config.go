@@ -29,7 +29,7 @@ type configData struct {
 	// MaxVisibleRows is the maximum number of entries the picker
 	// shows inside the list box before scrolling. It must be
 	// between 1 and 1000. A zero value means "use the default"
-	// (10).
+	// (20).
 	MaxVisibleRows int `json:"maxVisibleRows"`
 }
 
@@ -92,10 +92,12 @@ func (c *Config) SetShowCommand(v bool) {
 
 // MaxVisibleRows returns the maximum number of entries the picker
 // shows inside the list box. The default (when the setting has never
-// been changed) is 10.
+// been changed) is 20. The TUI further caps this against the
+// current terminal height so the frame fits the alternate screen;
+// arrow keys scroll within the list for anything beyond that.
 func (c *Config) MaxVisibleRows() int {
 	if c.data.MaxVisibleRows <= 0 {
-		return 10
+		return 20
 	}
 	return c.data.MaxVisibleRows
 }

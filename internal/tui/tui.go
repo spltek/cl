@@ -343,6 +343,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = sizeMsg.Width
 		m.height = sizeMsg.Height
 		m.applyWidth()
+		// Force a full repaint on resize. Without this, expanding
+		// the terminal (especially after inline/alt-screen
+		// transitions) can leave blank "holes" that were never
+		// drawn into.
+		return m, tea.ClearScreen
 	}
 
 	switch m.mode {
@@ -444,21 +449,38 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// visibleRows returns the effective number of rows to show in the
-// list, capped so the entire TUI fits in the terminal when its
-// height is known.
+// visibleRows returns the effective number of list entries to show.
+// It is the configured MaxVisibleRows, further capped so the
+// rendered frame fits inside the alternate-screen terminal height
+// (filter + box + help + gaps leave a fixed chrome budget). When
+// the config asks for more entries than fit, arrow-key scrolling
+// inside the list covers the rest - alt-screen has no terminal
+// scrollback the way an inline "paste" would.
 func (m model) visibleRows() int {
-	n := m.cfg.MaxVisibleRows()
-	if m.height > 0 {
-		space := m.height - 14 // input, box chrome, gaps, help
-		if space < 1 {
-			space = 1
-		}
-		if n > space {
-			n = space
-		}
+	want := m.cfg.MaxVisibleRows()
+	if m.height <= 0 {
+		return want
 	}
-	return n
+
+	const chrome = 16 // filter, borders, help, gaps
+	availLines := m.height - chrome
+	if availLines < 1 {
+		availLines = 1
+	}
+
+	perEntry := 1
+	if m.cfg.ShowCommand() {
+		// name + command + spacer between entries
+		perEntry = 3
+	}
+	availEntries := availLines / perEntry
+	if availEntries < 1 {
+		availEntries = 1
+	}
+	if want > availEntries {
+		return availEntries
+	}
+	return want
 }
 
 // startSetRows enters the mode for changing the maximum number of
@@ -687,31 +709,40 @@ func (m model) updateConfirm(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m model) View() tea.View {
 	if m.quitting {
+		// Leaving AltScreen unset exits the alternate buffer and
+		// restores the user's previous terminal content.
 		return tea.NewView("")
 	}
 
+	var v tea.View
 	switch m.mode {
 	case modeAddName:
-		return m.viewForm("Add command - name:", "enter continue · esc cancel")
+		v = m.viewForm("Add command - name:", "enter continue · esc cancel")
 	case modeAddValue:
-		return m.viewForm(fmt.Sprintf("Add command %q - shell command:", m.pendingName), "enter save · esc cancel")
+		v = m.viewForm(fmt.Sprintf("Add command %q - shell command:", m.pendingName), "enter save · esc cancel")
 	case modeEditValue:
-		return m.viewForm(fmt.Sprintf("Edit %q:", m.target.Name), "enter continue · esc cancel")
+		v = m.viewForm(fmt.Sprintf("Edit %q:", m.target.Name), "enter continue · esc cancel")
 	case modeRenameName:
-		return m.viewForm(fmt.Sprintf("Rename %q:", m.target.Name), "enter continue · esc cancel")
+		v = m.viewForm(fmt.Sprintf("Rename %q:", m.target.Name), "enter continue · esc cancel")
 	case modeConfirmSaveEdit:
-		return tea.NewView(m.viewConfirm(fmt.Sprintf("Save %q -> %s ?", m.target.Name, m.pendingValue)))
+		v = tea.NewView(m.viewConfirm(fmt.Sprintf("Save %q -> %s ?", m.target.Name, m.pendingValue)))
 	case modeConfirmRename:
-		return tea.NewView(m.viewConfirm(fmt.Sprintf("Rename %q -> %q ?", m.target.Name, m.pendingName)))
+		v = tea.NewView(m.viewConfirm(fmt.Sprintf("Rename %q -> %q ?", m.target.Name, m.pendingName)))
 	case modeConfirmDelete:
-		return tea.NewView(m.viewConfirm(fmt.Sprintf("Delete %q (%s) ?", m.target.Name, m.target.Command)))
+		v = tea.NewView(m.viewConfirm(fmt.Sprintf("Delete %q (%s) ?", m.target.Name, m.target.Command)))
 	case modeFillPlaceholders:
-		return m.viewFillPlaceholders()
+		v = m.viewFillPlaceholders()
 	case modeSetRows:
-		return m.viewSetRows()
+		v = m.viewSetRows()
 	default:
-		return m.viewList()
+		v = m.viewList()
 	}
+	// Always paint into the alternate screen buffer so the whole
+	// frame is under Bubble Tea's control. Inline (main-buffer)
+	// rendering leaves blank holes when the window grows and was
+	// also what forced the old "pad with newlines" scroll hack.
+	v.AltScreen = true
+	return v
 }
 
 // viewSetRows renders the ctrl+l screen for changing the maximum
@@ -847,14 +878,13 @@ func (m model) viewList() tea.View {
 	} else {
 		b.WriteString(listContent.String())
 	}
-	b.WriteString("\n\n") // more breathing room below the box than above
+	b.WriteString("\n")
 
 	if m.pendingErr != "" {
 		b.WriteString(m.wrapStyled(m.styles.errMsg, m.pendingErr))
 		b.WriteString("\n")
 	}
 
-	b.WriteString("\n")
 	b.WriteString(m.listHelp())
 
 	v := tea.NewView(b.String())

@@ -253,3 +253,27 @@ func TestResolveCommand_DefaultWithPathSeparators(t *testing.T) {
 		t.Fatalf("resolveCommand = %q, want %q", got, want)
 	}
 }
+
+func TestBuildParamHint_Empty(t *testing.T) {
+	if got := buildParamHint(nil); got != "" {
+		t.Fatalf("buildParamHint(nil) = %q, want empty", got)
+	}
+}
+
+func TestBuildParamHint_WithoutDefaults(t *testing.T) {
+	phs := parsePlaceholders("ssh {{user}}@{{host}}")
+	got := buildParamHint(phs)
+	want := "[user, host]"
+	if got != want {
+		t.Fatalf("buildParamHint = %q, want %q", got, want)
+	}
+}
+
+func TestBuildParamHint_WithDefaultsUsesDefaultPrefix(t *testing.T) {
+	phs := parsePlaceholders("echo {{name:pippo}} {{count:10}}")
+	got := buildParamHint(phs)
+	want := "[name(default:pippo), count(default:10)]"
+	if got != want {
+		t.Fatalf("buildParamHint = %q, want %q", got, want)
+	}
+}

@@ -2,10 +2,11 @@
 // name -> shell command dictionary and lets you search it
 // interactively. Adding, editing, renaming and deleting commands all
 // happen inside the interactive picker itself
-// (ctrl+a/ctrl+e/ctrl+r/ctrl+d) - see printUsage below. Enter always
-// runs the picked command directly. Whether the list shows each
-// entry's command next to its name is controlled by the picker's
-// own ctrl+s toggle (store.Config.ShowCommand).
+// (ctrl+a/ctrl+e/ctrl+r/ctrl+d/ctrl+l) - see printUsage below. Enter
+// always runs the picked command directly (after prompting for any
+// {{placeholders}}). Whether the list shows each entry's command
+// under its name is controlled by the picker's own ctrl+s toggle
+// (store.Config.ShowCommand).
 package main
 
 import (
@@ -164,7 +165,8 @@ Inside the picker:
   ctrl+e   edit the highlighted command
   ctrl+r   rename the highlighted command
   ctrl+d   delete the highlighted command
-  ctrl+s   toggle showing each command next to its name in the list
-  enter    run the highlighted command
+  ctrl+s   toggle showing each command under its name in the list
+  ctrl+l   set how many list entries are visible (default 20)
+  enter    run the highlighted command (prompts for {{placeholders}} first)
   esc      cancel`)
 }

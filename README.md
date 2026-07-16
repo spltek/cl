@@ -40,10 +40,16 @@ separate "add"/"remove" subcommand to remember:
   command is rejected in place with an inline message.
 - `Ctrl+D` deletes the highlighted command, after a `y`/`N`
   confirmation.
+- `Ctrl+L` changes how many list entries are visible at once
+  (default **20**, persisted; further capped to fit the terminal
+  height — use ↑/↓ to scroll beyond that).
 - A command can contain **placeholders** with the `{{name}}` or
   `{{name:default}}` syntax. When you pick such a command, `cl`
   prompts you to fill each placeholder before running it — see
-  [Placeholders](#placeholders) below.
+  [Placeholders](#placeholders) below. In the list, commands with
+  placeholders show a hint next to the name, e.g.
+  `ssh server [user, host]` or
+  `git push [remote(default:origin), branch(default:main)]`.
 - Commands are persisted as JSON in your user config directory
   (`~/Library/Application Support/cl` on macOS, `~/.config/cl` on
   Linux, `%AppData%\cl` on Windows) — written to disk immediately as
@@ -152,6 +158,17 @@ Placeholder names can contain letters, digits and underscores
 (`\w+`). The default value can be any text that does not contain
 `}}`.
 
+In the list, placeholders appear as a hint after the command name:
+
+```
+ssh server [user, host]
+git push [remote(default:origin), branch(default:main)]
+echo hi [name(default:pippo)]
+```
+
+Required parameters are listed as bare names; parameters with a
+default use `name(default:value)`.
+
 ### Example
 
 Add a command with a placeholder:
@@ -165,7 +182,7 @@ Now pick it:
 ```
 $ cl ssh
 cl> ssh
-> ssh server
+> ssh server [user, host]
 
 ↑/↓ move  enter run selected  ...
 
@@ -210,7 +227,7 @@ psql -h {{host:localhost}} -p {{port:5432}} -U {{user}} -d {{db:postgres}}
 ssh {{user}}@prod-{{num:1}}.example.com
 
 # Docker with configurable ports
-ocker run -p {{port:3000}}:3000 {{image:node:18}}
+docker run -p {{port:3000}}:3000 {{image:node:18}}
 
 # Kubernetes with namespace
 kubectl logs {{pod}} -n {{namespace:default}}
@@ -230,7 +247,7 @@ cl>
 enter run selected
 ctrl+a add new command
 ctrl+s command show toggle
-ctrl+l visible rows (10)
+ctrl+l visible rows (20)
 esc cancel
 
 # press ctrl+a, type a name, enter, type the command, enter:
@@ -254,7 +271,7 @@ ctrl+e edit selected
 ctrl+r rename selected
 ctrl+d delete selected
 ctrl+s command show toggle
-ctrl+l visible rows (10)
+ctrl+l visible rows (20)
 esc cancel
 
 # press Enter on "build": cl announces the name (colored) before
@@ -278,7 +295,7 @@ ctrl+e edit selected
 ctrl+r rename selected
 ctrl+d delete selected
 ctrl+s command show toggle
-ctrl+l visible rows (10)
+ctrl+l visible rows (20)
 esc cancel
 # The command is visible below its name so you know what you're
 # about to run. Enter always executes it directly.

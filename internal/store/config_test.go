@@ -19,6 +19,19 @@ func TestLoadConfig_MissingFileDefaultsShowCommandToFalse(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_MissingFileDefaultsMaxVisibleRowsTo20(t *testing.T) {
+	withTempConfigDir(t)
+
+	c, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+
+	if got, want := c.MaxVisibleRows(), 20; got != want {
+		t.Fatalf("MaxVisibleRows() = %d, want %d by default", got, want)
+	}
+}
+
 func TestConfig_SaveAndLoadRoundTrip(t *testing.T) {
 	dir := withTempConfigDir(t)
 
