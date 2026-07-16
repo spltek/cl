@@ -123,8 +123,7 @@ git push origin v0.1.0
 ```
 
 `.github/workflows/ci.yml` runs build/vet/test/gofmt on every push and
-pull request (Linux + Windows; macOS is covered locally by the
-maintainer to save Actions minutes on macOS runners).
+pull request (Linux, Windows, and macOS).
 
 ## Development
 

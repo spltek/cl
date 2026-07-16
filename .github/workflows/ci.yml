@@ -7,12 +7,9 @@ on:
 
 jobs:
   test:
-    # macOS runners cost 10x Actions minutes on private repos, so CI
-    # covers Linux and Windows; macOS is exercised locally by the
-    # maintainer on every change instead.
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -42,8 +39,8 @@ jobs:
           }
           Write-Host "install.ps1 parses cleanly"
 
-      - name: Syntax-check install.sh (Linux only)
-        if: matrix.os == 'ubuntu-latest'
+      - name: Syntax-check install.sh (Linux/macOS)
+        if: matrix.os == 'ubuntu-latest' || matrix.os == 'macos-latest'
         run: bash -n install.sh
 
   fmt:
