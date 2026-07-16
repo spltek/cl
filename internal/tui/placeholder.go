@@ -1,6 +1,9 @@
 package tui
 
-import "regexp"
+import (
+	"regexp"
+	"strings"
+)
 
 // placeholderRe matches {{name}} and {{name:default}} patterns in
 // command strings. Named capture groups aren't used; positions from
@@ -54,6 +57,24 @@ func resolveCommand(command string, placeholders []placeholder, values []string)
 		result = result[:ph.Start] + val + result[ph.End:]
 	}
 	return result
+}
+
+// buildParamHint returns a human-readable parameter list like
+// "[param1, param2(10)]" from the given placeholders. It returns
+// an empty string when there are no placeholders.
+func buildParamHint(placeholders []placeholder) string {
+	if len(placeholders) == 0 {
+		return ""
+	}
+	parts := make([]string, len(placeholders))
+	for i, ph := range placeholders {
+		if ph.Default != "" {
+			parts[i] = ph.Name + "(" + ph.Default + ")"
+		} else {
+			parts[i] = ph.Name
+		}
+	}
+	return "[" + strings.Join(parts, ", ") + "]"
 }
 
 // buildPreview returns a human-readable preview of command where:

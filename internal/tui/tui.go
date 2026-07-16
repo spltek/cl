@@ -23,20 +23,22 @@ import (
 // it writes to the program's output - so, unlike in v1, these don't
 // need to be bound to any particular renderer.
 type styles struct {
-	selected lipgloss.Style
-	command  lipgloss.Style
-	help     lipgloss.Style
-	helpKey  lipgloss.Style
-	errMsg   lipgloss.Style
+	selected  lipgloss.Style
+	command   lipgloss.Style
+	help      lipgloss.Style
+	helpKey   lipgloss.Style
+	errMsg    lipgloss.Style
+	paramHint lipgloss.Style
 }
 
 func newStyles() styles {
 	return styles{
-		selected: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212")),
-		command:  lipgloss.NewStyle().Foreground(lipgloss.Color("244")),
-		help:     lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
-		helpKey:  lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("246")),
-		errMsg:   lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("204")),
+		selected:  lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212")),
+		command:   lipgloss.NewStyle().Foreground(lipgloss.Color("244")),
+		help:      lipgloss.NewStyle().Foreground(lipgloss.Color("240")),
+		helpKey:   lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("246")),
+		errMsg:    lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("204")),
+		paramHint: lipgloss.NewStyle().Italic(true).Foreground(lipgloss.Color("246")),
 	}
 }
 
@@ -784,6 +786,10 @@ func (m model) viewList() tea.View {
 		name := entry.Name
 		if i == m.cursor {
 			name = m.styles.selected.Render(name)
+		}
+		// Append parameter hint when the command has placeholders.
+		if phs := parsePlaceholders(entry.Command); len(phs) > 0 {
+			name += " " + m.styles.paramHint.Render(buildParamHint(phs))
 		}
 		listContent.WriteString(prefix + name)
 		listContent.WriteString("\n")
