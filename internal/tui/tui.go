@@ -16,8 +16,6 @@ import (
 	"github.com/silvio/cl/internal/store"
 )
 
-const maxVisibleRows = 10
-
 // styles holds the lipgloss styles used by the picker's own chrome
 // (list selection, command previews, help text, errors). Lip Gloss
 // v2 styles carry no I/O state of their own - the terminal's color
@@ -124,6 +122,7 @@ const (
 	modeConfirmRename
 	modeConfirmDelete
 	modeFillPlaceholders
+	modeSetRows
 )
 
 type model struct {
@@ -349,6 +348,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateConfirm(msg)
 	case modeFillPlaceholders:
 		return m.updateFillPlaceholders(msg)
+	case modeSetRows:
+		return m.updateSetRows(msg)
 	default:
 		return m.updateList(msg)
 	}
@@ -388,8 +389,8 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "down", "ctrl+n":
 			if m.cursor < len(m.filtered)-1 {
 				m.cursor++
-				if m.cursor >= m.scroll+maxVisibleRows {
-					m.scroll = m.cursor - maxVisibleRows + 1
+				if m.cursor >= m.scroll+m.cfg.MaxVisibleRows() {
+					m.scroll = m.cursor - m.cfg.MaxVisibleRows() + 1
 				}
 			}
 			return m, nil
@@ -419,6 +420,10 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+s":
 			m.toggleShowCommand()
 			return m, nil
+
+		case "ctrl+l":
+			m.startSetRows()
+			return m, nil
 		}
 	}
 
@@ -433,6 +438,16 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.refilter()
 
 	return m, cmd
+}
+
+// startSetRows enters the mode for changing the maximum number of
+// visible rows via ctrl+l.
+func (m *model) startSetRows() {
+	m.mode = modeSetRows
+	m.pendingErr = ""
+	m.setForm(newTextArea("> ", "rows (1-1000)"))
+	m.form.SetValue(fmt.Sprintf("%d", m.cfg.MaxVisibleRows()))
+	m.form.CursorEnd()
 }
 
 // updateForm drives modeAddName, modeAddValue, modeEditValue and
@@ -575,6 +590,42 @@ func (m model) updateFillPlaceholders(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// updateSetRows drives the mode for changing the maximum number of
+// visible rows (ctrl+l). Enter validates and saves; esc cancels.
+func (m model) updateSetRows(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
+		switch keyMsg.String() {
+		case "esc":
+			m.cancelForm()
+			return m, nil
+
+		case "enter":
+			val := strings.TrimSpace(m.form.Value())
+			parsed := 0
+			if _, err := fmt.Sscanf(val, "%d", &parsed); err != nil || parsed < 1 || parsed > 1000 {
+				m.pendingErr = "value must be a number between 1 and 1000"
+				return m, nil
+			}
+			m.cfg.SetMaxVisibleRows(parsed)
+			if err := m.cfg.Save(); err != nil {
+				m.pendingErr = fmt.Sprintf("save failed: %v", err)
+				return m, nil
+			}
+			m.finishMutation()
+			return m, nil
+		}
+	}
+
+	if pasteMsg, ok := msg.(tea.PasteMsg); ok {
+		m.form.InsertString(sanitizePaste(pasteMsg.Content))
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	m.form, cmd = m.form.Update(msg)
+	return m, cmd
+}
+
 // updateConfirm drives the yes/no confirmation screens for saving an
 // edit, for renaming, and for deleting an entry.
 func (m model) updateConfirm(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -635,9 +686,38 @@ func (m model) View() tea.View {
 		return tea.NewView(m.viewConfirm(fmt.Sprintf("Delete %q (%s) ?", m.target.Name, m.target.Command)))
 	case modeFillPlaceholders:
 		return m.viewFillPlaceholders()
+	case modeSetRows:
+		return m.viewSetRows()
 	default:
 		return m.viewList()
 	}
+}
+
+// viewSetRows renders the ctrl+l screen for changing the maximum
+// number of visible rows.
+func (m model) viewSetRows() tea.View {
+	var b strings.Builder
+
+	title := fmt.Sprintf("Max visible rows (current: %d):", m.cfg.MaxVisibleRows())
+	titleView := m.wrap(title)
+	b.WriteString(titleView)
+	b.WriteString("\n")
+	b.WriteString(m.form.View())
+	b.WriteString("\n")
+
+	if m.pendingErr != "" {
+		b.WriteString(m.wrapStyled(m.styles.errMsg, m.pendingErr))
+		b.WriteString("\n")
+	}
+
+	b.WriteString(m.wrapStyled(m.styles.help, "enter confirm · esc cancel"))
+
+	v := tea.NewView(b.String())
+	if cur := m.form.Cursor(); cur != nil {
+		cur.Position.Y += lipgloss.Height(titleView)
+		v.Cursor = cur
+	}
+	return v
 }
 
 func (m model) viewList() tea.View {
@@ -646,9 +726,30 @@ func (m model) viewList() tea.View {
 	b.WriteString(m.input.View())
 	b.WriteString("\n")
 
-	end := m.scroll + maxVisibleRows
+	// Build the list content to go inside the bordered box.
+	var listContent strings.Builder
+
+	// Content width accounts for the border (2 chars: left + right).
+	contentWidth := m.width
+	if contentWidth > 0 {
+		contentWidth -= 2
+		if contentWidth < 10 {
+			contentWidth = 10
+		}
+	}
+
+	end := m.scroll + m.cfg.MaxVisibleRows()
 	if end > len(m.filtered) {
 		end = len(m.filtered)
+	}
+
+	// Scroll indicators so the user knows there are items off-screen.
+	hasAbove := m.scroll > 0
+	hasBelow := end < len(m.filtered)
+
+	if hasAbove {
+		listContent.WriteString(m.styles.help.Render("  ↑ more above"))
+		listContent.WriteString("\n")
 	}
 
 	for i := m.scroll; i < end; i++ {
@@ -664,8 +765,8 @@ func (m model) viewList() tea.View {
 		if i == m.cursor {
 			name = m.styles.selected.Render(name)
 		}
-		b.WriteString(prefix + name)
-		b.WriteString("\n")
+		listContent.WriteString(prefix + name)
+		listContent.WriteString("\n")
 
 		// Command line(s), indented under the name and word-wrapped.
 		// The indent always uses spaces (never ">") so continuation
@@ -674,31 +775,53 @@ func (m model) viewList() tea.View {
 			cmdIndent := strings.Repeat(" ", lipgloss.Width(prefix))
 			cmdText := m.styles.command.Render(entry.Command)
 			if m.width > 0 {
-				wrapWidth := m.width - lipgloss.Width(cmdIndent)
+				wrapWidth := contentWidth - lipgloss.Width(cmdIndent)
 				if wrapWidth < 10 {
 					wrapWidth = 10
 				}
 				wrapped := lipgloss.NewStyle().Width(wrapWidth).Render(cmdText)
 				for _, wl := range strings.Split(wrapped, "\n") {
-					b.WriteString(cmdIndent + wl)
-					b.WriteString("\n")
+					listContent.WriteString(cmdIndent + wl)
+					listContent.WriteString("\n")
 				}
 			} else {
-				b.WriteString(cmdIndent + cmdText)
-				b.WriteString("\n")
+				listContent.WriteString(cmdIndent + cmdText)
+				listContent.WriteString("\n")
 			}
 		}
 
 		// Extra spacing between multi-line entries (showCommand on).
 		if m.cfg.ShowCommand() {
-			b.WriteString("\n")
+			listContent.WriteString("\n")
 		}
 	}
 
-	if len(m.filtered) == 0 {
-		b.WriteString(m.styles.help.Render("  no matching commands"))
-		b.WriteString("\n")
+	if hasBelow {
+		listContent.WriteString(m.styles.help.Render("  ↓ more below"))
+		listContent.WriteString("\n")
 	}
+
+	if len(m.filtered) == 0 {
+		listContent.WriteString(m.styles.help.Render("  no matching commands"))
+		listContent.WriteString("\n")
+	}
+
+	// Trim trailing newlines so the last item sits close to the bottom border.
+	content := strings.TrimRight(listContent.String(), "\n")
+
+	// Wrap list content in a subtle gray bordered box that spans the
+	// full terminal width and adapts its height to the content.
+	if m.width > 0 {
+		boxed := lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder()).
+			BorderForeground(lipgloss.Color("240")).
+			Width(m.width).
+			Render(content)
+		b.WriteString(boxed)
+	} else {
+		b.WriteString(listContent.String())
+	}
+	b.WriteString("\n\n") // more breathing room below the box than above
 
 	if m.pendingErr != "" {
 		b.WriteString(m.wrapStyled(m.styles.errMsg, m.pendingErr))
@@ -730,6 +853,7 @@ func (m model) listHelp() string {
 	}
 	items = append(items,
 		[2]string{"ctrl+s", "command show toggle"},
+		[2]string{"ctrl+l", fmt.Sprintf("visible rows (%d)", m.cfg.MaxVisibleRows())},
 		[2]string{"esc", "cancel"},
 	)
 
