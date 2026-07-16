@@ -230,6 +230,7 @@ cl>
 enter run selected
 ctrl+a add new command
 ctrl+s command show toggle
+ctrl+l visible rows (10)
 esc cancel
 
 # press ctrl+a, type a name, enter, type the command, enter:
@@ -253,6 +254,7 @@ ctrl+e edit selected
 ctrl+r rename selected
 ctrl+d delete selected
 ctrl+s command show toggle
+ctrl+l visible rows (10)
 esc cancel
 
 # press Enter on "build": cl announces the name (colored) before
@@ -276,6 +278,7 @@ ctrl+e edit selected
 ctrl+r rename selected
 ctrl+d delete selected
 ctrl+s command show toggle
+ctrl+l visible rows (10)
 esc cancel
 # The command is visible below its name so you know what you're
 # about to run. Enter always executes it directly.

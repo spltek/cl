@@ -144,7 +144,8 @@ type model struct {
 	// help, errors) via wrap/wrapStyled, so that nothing ever
 	// overflows onto the terminal's own line wrap - which would
 	// throw off the fixed row math (cursor Y) below it.
-	width int
+	width  int
+	height int
 
 	mode mode
 
@@ -338,6 +339,7 @@ func (m model) Init() tea.Cmd {
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if sizeMsg, ok := msg.(tea.WindowSizeMsg); ok {
 		m.width = sizeMsg.Width
+		m.height = sizeMsg.Height
 		m.applyWidth()
 	}
 
@@ -389,8 +391,8 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "down", "ctrl+n":
 			if m.cursor < len(m.filtered)-1 {
 				m.cursor++
-				if m.cursor >= m.scroll+m.cfg.MaxVisibleRows() {
-					m.scroll = m.cursor - m.cfg.MaxVisibleRows() + 1
+				if m.cursor >= m.scroll+m.visibleRows() {
+					m.scroll = m.cursor - m.visibleRows() + 1
 				}
 			}
 			return m, nil
@@ -438,6 +440,23 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.refilter()
 
 	return m, cmd
+}
+
+// visibleRows returns the effective number of rows to show in the
+// list, capped so the entire TUI fits in the terminal when its
+// height is known.
+func (m model) visibleRows() int {
+	n := m.cfg.MaxVisibleRows()
+	if m.height > 0 {
+		space := m.height - 14 // input, box chrome, gaps, help
+		if space < 1 {
+			space = 1
+		}
+		if n > space {
+			n = space
+		}
+	}
+	return n
 }
 
 // startSetRows enters the mode for changing the maximum number of
@@ -738,7 +757,8 @@ func (m model) viewList() tea.View {
 		}
 	}
 
-	end := m.scroll + m.cfg.MaxVisibleRows()
+	maxRows := m.visibleRows()
+	end := m.scroll + maxRows
 	if end > len(m.filtered) {
 		end = len(m.filtered)
 	}

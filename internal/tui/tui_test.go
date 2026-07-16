@@ -1492,3 +1492,135 @@ func TestPlaceholder_BackspaceInPlaceholderForm(t *testing.T) {
 		t.Fatalf("phVals[0] = %q, want %q", m.phVals[0], "upstream")
 	}
 }
+
+// --- visibleRows height-capping ---
+
+func TestVisibleRows_UsesConfiguredValueWhenHeightUnknown(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.SetMaxVisibleRows(15)
+	m := newModel("", testStore(t), cfg, testStyles())
+
+	// height is 0 (unknown), so visibleRows returns configured value.
+	if got, want := m.visibleRows(), 15; got != want {
+		t.Fatalf("visibleRows() = %d, want %d (height unknown)", got, want)
+	}
+}
+
+func TestVisibleRows_CapsToTerminalHeight(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.SetMaxVisibleRows(20)
+	m := newModel("", testStore(t), cfg, testStyles())
+
+	// Simulate a short terminal: 20 rows total, chrome takes ~14, 6 remain.
+	m, _ = update(m, tea.WindowSizeMsg{Width: 80, Height: 20})
+
+	if got, want := m.visibleRows(), 6; got != want {
+		t.Fatalf("visibleRows() = %d, want %d (terminal height 20 -> 20-14=6)", got, want)
+	}
+}
+
+func TestVisibleRows_NeverBelowOne(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.SetMaxVisibleRows(10)
+	m := newModel("", testStore(t), cfg, testStyles())
+
+	// Very short terminal.
+	m, _ = update(m, tea.WindowSizeMsg{Width: 80, Height: 5})
+
+	if got, want := m.visibleRows(), 1; got != want {
+		t.Fatalf("visibleRows() = %d, want 1 (terminal height 5 -> clamps to 1)", got)
+	}
+}
+
+func TestVisibleRows_ReturnsConfiguredWhenEnoughSpace(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.SetMaxVisibleRows(10)
+	m := newModel("", testStore(t), cfg, testStyles())
+
+	// Tall terminal: plenty of room.
+	m, _ = update(m, tea.WindowSizeMsg{Width: 80, Height: 50})
+
+	if got, want := m.visibleRows(), 10; got != want {
+		t.Fatalf("visibleRows() = %d, want %d (terminal height 50 > 10+14)", got, want)
+	}
+}
+
+// --- Ctrl+L set-rows flow ---
+
+func TestSetRows_CtrlLEntersModeWithCurrentValuePrefilled(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.SetMaxVisibleRows(7)
+	m := newModel("", testStore(t), cfg, testStyles())
+
+	m, _ = update(m, ctrlKey('l'))
+
+	if m.mode != modeSetRows {
+		t.Fatalf("mode after ctrl+l = %v, want modeSetRows", m.mode)
+	}
+	if got, want := m.form.Value(), "7"; got != want {
+		t.Fatalf("form.Value() = %q, want %q (current value)", got, want)
+	}
+}
+
+func TestSetRows_ValidValueSavesAndReturnsToList(t *testing.T) {
+	cfg := testConfig(t)
+	m := newModel("", testStore(t), cfg, testStyles())
+
+	m, _ = update(m, ctrlKey('l'))
+
+	// Clear pre-filled "10" and type "5".
+	for range "10" {
+		m, _ = update(m, key(tea.KeyBackspace))
+	}
+	m = typeString(m, "5")
+	m, _ = update(m, key(tea.KeyEnter))
+
+	if m.mode != modeList {
+		t.Fatalf("mode after valid set-rows = %v, want modeList (pendingErr=%q)", m.mode, m.pendingErr)
+	}
+	if got, want := cfg.MaxVisibleRows(), 5; got != want {
+		t.Fatalf("cfg.MaxVisibleRows() = %d, want %d", got, want)
+	}
+}
+
+func TestSetRows_InvalidValueShowsErrorAndStays(t *testing.T) {
+	cfg := testConfig(t)
+	m := newModel("", testStore(t), cfg, testStyles())
+
+	m, _ = update(m, ctrlKey('l'))
+
+	// Clear pre-filled "10" and type "0".
+	for range "10" {
+		m, _ = update(m, key(tea.KeyBackspace))
+	}
+	m = typeString(m, "0")
+	m, _ = update(m, key(tea.KeyEnter))
+
+	if m.mode != modeSetRows {
+		t.Fatalf("mode after invalid value = %v, want modeSetRows to stay", m.mode)
+	}
+	if m.pendingErr == "" {
+		t.Fatalf("pendingErr is empty, want an error message")
+	}
+}
+
+func TestSetRows_EscCancelsWithoutSaving(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.SetMaxVisibleRows(10)
+	m := newModel("", testStore(t), cfg, testStyles())
+
+	m, _ = update(m, ctrlKey('l'))
+	// Change value but then cancel.
+	for range "10" {
+		m, _ = update(m, key(tea.KeyBackspace))
+	}
+	m = typeString(m, "25")
+	m, _ = update(m, key(tea.KeyEsc))
+
+	if m.mode != modeList {
+		t.Fatalf("mode after esc = %v, want modeList", m.mode)
+	}
+	if got, want := cfg.MaxVisibleRows(), 10; got != want {
+		t.Fatalf("cfg.MaxVisibleRows() = %d, want unchanged %d", got, want)
+	}
+}
