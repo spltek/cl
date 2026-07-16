@@ -42,9 +42,6 @@ separate "add"/"remove" subcommand to remember:
   command is rejected in place with an inline message.
 - `Ctrl+D` deletes the highlighted command, after a `y`/`N`
   confirmation.
-- `Ctrl+L` changes how many list entries are visible at once
-  (default **20**, persisted; further capped to fit the terminal
-  height — use ↑/↓ to scroll beyond that).
 - A command can contain **placeholders** with the `{{name}}` or
   `{{name:default}}` syntax. When you pick such a command, `cl`
   prompts you to fill each placeholder before running it — see
@@ -280,7 +277,6 @@ cl>
 enter run selected
 ctrl+a add new command
 ctrl+s command show toggle
-ctrl+l visible rows (20)
 esc cancel
 
 # press ctrl+a, type a name, enter, type the command, enter:
@@ -304,7 +300,6 @@ ctrl+e edit selected
 ctrl+r rename selected
 ctrl+d delete selected
 ctrl+s command show toggle
-ctrl+l visible rows (20)
 esc cancel
 
 # press Enter on "build": cl announces the name (colored) before
@@ -328,7 +323,6 @@ ctrl+e edit selected
 ctrl+r rename selected
 ctrl+d delete selected
 ctrl+s command show toggle
-ctrl+l visible rows (20)
 esc cancel
 # The command is visible below its name so you know what you're
 # about to run. Enter always executes it directly.

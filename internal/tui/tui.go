@@ -124,7 +124,6 @@ const (
 	modeConfirmRename
 	modeConfirmDelete
 	modeFillPlaceholders
-	modeSetRows
 )
 
 type model struct {
@@ -357,8 +356,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateConfirm(msg)
 	case modeFillPlaceholders:
 		return m.updateFillPlaceholders(msg)
-	case modeSetRows:
-		return m.updateSetRows(msg)
 	default:
 		return m.updateList(msg)
 	}
@@ -429,10 +426,6 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+s":
 			m.toggleShowCommand()
 			return m, nil
-
-		case "ctrl+l":
-			m.startSetRows()
-			return m, nil
 		}
 	}
 
@@ -449,17 +442,15 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// visibleRows returns the effective number of list entries to show.
-// It is the configured MaxVisibleRows, further capped so the
-// rendered frame fits inside the alternate-screen terminal height
-// (filter + box + help + gaps leave a fixed chrome budget). When
-// the config asks for more entries than fit, arrow-key scrolling
-// inside the list covers the rest - alt-screen has no terminal
-// scrollback the way an inline "paste" would.
+// visibleRows returns how many list entries fit in the current
+// terminal height after accounting for the filter, borders, help
+// and gaps (a fixed chrome budget). When the height hasn't been
+// received yet (tea.WindowSizeMsg), it returns a conservative
+// default so scrolling still works. Arrow-key scrolling inside the
+// list covers entries beyond what fits in the frame.
 func (m model) visibleRows() int {
-	want := m.cfg.MaxVisibleRows()
 	if m.height <= 0 {
-		return want
+		return 20
 	}
 
 	const chrome = 16 // filter, borders, help, gaps
@@ -477,20 +468,7 @@ func (m model) visibleRows() int {
 	if availEntries < 1 {
 		availEntries = 1
 	}
-	if want > availEntries {
-		return availEntries
-	}
-	return want
-}
-
-// startSetRows enters the mode for changing the maximum number of
-// visible rows via ctrl+l.
-func (m *model) startSetRows() {
-	m.mode = modeSetRows
-	m.pendingErr = ""
-	m.setForm(newTextArea("> ", "rows (1-1000)"))
-	m.form.SetValue(fmt.Sprintf("%d", m.cfg.MaxVisibleRows()))
-	m.form.CursorEnd()
+	return availEntries
 }
 
 // updateForm drives modeAddName, modeAddValue, modeEditValue and
@@ -633,42 +611,6 @@ func (m model) updateFillPlaceholders(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// updateSetRows drives the mode for changing the maximum number of
-// visible rows (ctrl+l). Enter validates and saves; esc cancels.
-func (m model) updateSetRows(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
-		switch keyMsg.String() {
-		case "esc":
-			m.cancelForm()
-			return m, nil
-
-		case "enter":
-			val := strings.TrimSpace(m.form.Value())
-			parsed := 0
-			if _, err := fmt.Sscanf(val, "%d", &parsed); err != nil || parsed < 1 || parsed > 1000 {
-				m.pendingErr = "value must be a number between 1 and 1000"
-				return m, nil
-			}
-			m.cfg.SetMaxVisibleRows(parsed)
-			if err := m.cfg.Save(); err != nil {
-				m.pendingErr = fmt.Sprintf("save failed: %v", err)
-				return m, nil
-			}
-			m.finishMutation()
-			return m, nil
-		}
-	}
-
-	if pasteMsg, ok := msg.(tea.PasteMsg); ok {
-		m.form.InsertString(sanitizePaste(pasteMsg.Content))
-		return m, nil
-	}
-
-	var cmd tea.Cmd
-	m.form, cmd = m.form.Update(msg)
-	return m, cmd
-}
-
 // updateConfirm drives the yes/no confirmation screens for saving an
 // edit, for renaming, and for deleting an entry.
 func (m model) updateConfirm(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -732,8 +674,6 @@ func (m model) View() tea.View {
 		v = tea.NewView(m.viewConfirm(fmt.Sprintf("Delete %q (%s) ?", m.target.Name, m.target.Command)))
 	case modeFillPlaceholders:
 		v = m.viewFillPlaceholders()
-	case modeSetRows:
-		v = m.viewSetRows()
 	default:
 		v = m.viewList()
 	}
@@ -742,33 +682,6 @@ func (m model) View() tea.View {
 	// rendering leaves blank holes when the window grows and was
 	// also what forced the old "pad with newlines" scroll hack.
 	v.AltScreen = true
-	return v
-}
-
-// viewSetRows renders the ctrl+l screen for changing the maximum
-// number of visible rows.
-func (m model) viewSetRows() tea.View {
-	var b strings.Builder
-
-	title := fmt.Sprintf("Max visible rows (current: %d):", m.cfg.MaxVisibleRows())
-	titleView := m.wrap(title)
-	b.WriteString(titleView)
-	b.WriteString("\n")
-	b.WriteString(m.form.View())
-	b.WriteString("\n")
-
-	if m.pendingErr != "" {
-		b.WriteString(m.wrapStyled(m.styles.errMsg, m.pendingErr))
-		b.WriteString("\n")
-	}
-
-	b.WriteString(m.wrapStyled(m.styles.help, "enter confirm · esc cancel"))
-
-	v := tea.NewView(b.String())
-	if cur := m.form.Cursor(); cur != nil {
-		cur.Position.Y += lipgloss.Height(titleView)
-		v.Cursor = cur
-	}
 	return v
 }
 
@@ -909,7 +822,6 @@ func (m model) listHelp() string {
 	}
 	items = append(items,
 		[2]string{"ctrl+s", "command show toggle"},
-		[2]string{"ctrl+l", fmt.Sprintf("visible rows (%d)", m.cfg.MaxVisibleRows())},
 		[2]string{"esc", "cancel"},
 	)
 
