@@ -36,8 +36,14 @@ esac
 tag="${1:-}"
 if [ -z "$tag" ]; then
   echo "Resolving latest release..."
-  tag="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
-    | grep '"tag_name":' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')"
+  # Try jq first (robust JSON parsing), fallback to grep+sed if unavailable.
+  if command -v jq >/dev/null 2>&1; then
+    tag="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
+      | jq -r '.tag_name')"
+  else
+    tag="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
+      | grep '"tag_name":' | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')"
+  fi
 fi
 
 if [ -z "$tag" ]; then

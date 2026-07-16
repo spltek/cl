@@ -453,8 +453,27 @@ func (m model) visibleRows() int {
 		return 20
 	}
 
-	const chrome = 16 // filter, borders, help, gaps
-	availLines := m.height - chrome
+	// The filter input can word-wrap onto multiple rows in narrow
+	// terminals; account for its actual rendered height so the list
+	// chrome budget doesn't get overstated and push content off the
+	// bottom of the screen. Similarly, the help text at the bottom
+	// has a variable number of lines (5-8 depending on whether the
+	// list is empty) and may word-wrap in narrow terminals — compute
+	// its real height instead of assuming a fixed chrome budget.
+	inputHeight := 1 // fallback when width is unknown
+	if m.width > 0 {
+		inputHeight = lipgloss.Height(m.input.View())
+	}
+
+	// Dynamic chrome: 2 border rows (top + bottom) + 1 gap row +
+	// help text height (variable line count + possible word-wrap).
+	chrome := 3 // borders + gap
+	if m.width > 0 {
+		chrome += lipgloss.Height(m.wrapStyled(m.styles.help, m.listHelp()))
+	} else {
+		chrome += strings.Count(m.listHelp(), "\n") + 1
+	}
+	availLines := m.height - inputHeight - chrome
 	if availLines < 1 {
 		availLines = 1
 	}

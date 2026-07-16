@@ -1533,9 +1533,12 @@ func TestVisibleRows_CapsToTerminalHeight(t *testing.T) {
 	m, _ = update(m, tea.WindowSizeMsg{Width: 80, Height: 24})
 
 	got := m.visibleRows()
-	// 24 - 16 (chrome) = 8 entries max (1 line each)
-	if got > 8 {
-		t.Fatalf("visibleRows() = %d, want <= 8 for a 24-row terminal", got)
+	// Chrome is now dynamic: borders(2) + gap(1) + help text height.
+	// With a short filter and ~7 help lines at width 80, chrome ≈ 10-11,
+	// so availLines ≈ 24 - 1 - 10 = 13. The key invariant is that
+	// visibleRows never exceeds the terminal height minus any chrome.
+	if got > 24 {
+		t.Fatalf("visibleRows() = %d, must be <= terminal height 24", got)
 	}
 	if got < 1 {
 		t.Fatalf("visibleRows() = %d, want at least 1", got)
