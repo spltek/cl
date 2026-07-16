@@ -263,7 +263,7 @@ func TestBuildParamHint_Empty(t *testing.T) {
 func TestBuildParamHint_WithoutDefaults(t *testing.T) {
 	phs := parsePlaceholders("ssh {{user}}@{{host}}")
 	got := buildParamHint(phs)
-	want := "[user, host]"
+	want := "(user, host)"
 	if got != want {
 		t.Fatalf("buildParamHint = %q, want %q", got, want)
 	}
@@ -272,7 +272,7 @@ func TestBuildParamHint_WithoutDefaults(t *testing.T) {
 func TestBuildParamHint_WithDefaultsUsesDefaultPrefix(t *testing.T) {
 	phs := parsePlaceholders("echo {{name:pippo}} {{count:10}}")
 	got := buildParamHint(phs)
-	want := "[name(default:pippo), count(default:10)]"
+	want := "(name[default:pippo], count[default:10])"
 	if got != want {
 		t.Fatalf("buildParamHint = %q, want %q", got, want)
 	}

@@ -1,5 +1,7 @@
 # cl — command launcher
 
+<img src="media/cl.png" alt="cl screenshot" width="100%" />
+
 A tiny personal command launcher. `cl` stores a `name -> shell command`
 dictionary in a JSON file and lets you search it interactively from
 your terminal. By default the command itself stays hidden — only
@@ -48,8 +50,8 @@ separate "add"/"remove" subcommand to remember:
   prompts you to fill each placeholder before running it — see
   [Placeholders](#placeholders) below. In the list, commands with
   placeholders show a hint next to the name, e.g.
-  `ssh server [user, host]` or
-  `git push [remote(default:origin), branch(default:main)]`.
+  `ssh server (user, host)` or
+  `git push (remote[default:origin], branch[default:main])`.
 - Commands are persisted as JSON in your user config directory
   (`~/Library/Application Support/cl` on macOS, `~/.config/cl` on
   Linux, `%AppData%\cl` on Windows) — written to disk immediately as
@@ -160,13 +162,13 @@ Placeholder names can contain letters, digits and underscores
 In the list, placeholders appear as a hint after the command name:
 
 ```
-ssh server [user, host]
-git push [remote(default:origin), branch(default:main)]
-echo hi [name(default:pippo)]
+ssh server (user, host)
+git push (remote[default:origin], branch[default:main])
+echo hi (name[default:pippo])
 ```
 
 Required parameters are listed as bare names; parameters with a
-default use `name(default:value)`.
+default use `name[default:value]`.
 
 ### Example
 
@@ -181,7 +183,7 @@ Now pick it:
 ```
 $ cl ssh
 cl> ssh
-> ssh server [user, host]
+> ssh server (user, host)
 
 ↑/↓ move  enter run selected  ...
 
@@ -234,6 +236,38 @@ kubectl logs {{pod}} -n {{namespace:default}}
 
 Placeholders work regardless of whether commands are shown or hidden
 in the list. `cl` always resolves them and runs the command directly.
+
+### Shell builtins that need `&& exec $SHELL`
+
+Some commands, like shell builtins, modify the current shell
+environment and need a replacement shell after running to persist
+their effects. Without `&& exec $SHELL` the command runs in a
+subshell and the changes are lost when it exits.
+
+The most common commands that need this pattern:
+
+| Command  | Why it needs `&& exec $SHELL`                          |
+|----------|--------------------------------------------------------|
+| `cd`     | Changes directory only in the subshell, then is lost   |
+| `source` | Sources a file in a subshell, leaving your env unchanged |
+| `.`      | Same as `source` — the dot builtin                     |
+| `export` | Sets env vars that disappear when the subshell ends    |
+| `alias`  | Defines aliases that are lost when the subshell exits  |
+| `unset`  | Unsets variables only in the subshell                  |
+
+**Example with `cd`:**
+
+```
+ctrl+a → name: "go to project" → command: cd /Users/silvio/Projects/Memori/AIsuru && exec $SHELL
+```
+
+When you pick this command, `cl` runs it and replaces the current
+shell with a fresh one in the target directory — so the `cd`
+actually persists.
+
+> **Tip:** You only need `&& exec $SHELL` for commands that *change
+> your shell state*. Regular commands like `git`, `npm`, `docker`,
+> `ssh`, etc. work fine without it.
 
 ## Example
 

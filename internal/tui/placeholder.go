@@ -60,7 +60,7 @@ func resolveCommand(command string, placeholders []placeholder, values []string)
 }
 
 // buildParamHint returns a human-readable parameter list like
-// "[param1, param2(default:10)]" from the given placeholders. It
+// "(param1, param2[default:10])" from the given placeholders. It
 // returns an empty string when there are no placeholders.
 func buildParamHint(placeholders []placeholder) string {
 	if len(placeholders) == 0 {
@@ -69,12 +69,12 @@ func buildParamHint(placeholders []placeholder) string {
 	parts := make([]string, len(placeholders))
 	for i, ph := range placeholders {
 		if ph.Default != "" {
-			parts[i] = ph.Name + "(default:" + ph.Default + ")"
+			parts[i] = ph.Name + "[default:" + ph.Default + "]"
 		} else {
 			parts[i] = ph.Name
 		}
 	}
-	return "[" + strings.Join(parts, ", ") + "]"
+	return "(" + strings.Join(parts, ", ") + ")"
 }
 
 // buildPreview returns a human-readable preview of command where:

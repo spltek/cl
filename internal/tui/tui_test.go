@@ -1156,8 +1156,8 @@ func TestPlaceholder_ListShowsParamHintWithoutDefaults(t *testing.T) {
 	m := newModel("ssh", placeholderStore(t), testConfig(t), testStyles())
 
 	view := m.View().Content
-	if !strings.Contains(view, "[user, host]") {
-		t.Fatalf("View() = %q, want list hint [user, host] for placeholders without defaults", view)
+	if !strings.Contains(view, "(user, host)") {
+		t.Fatalf("View() = %q, want list hint (user, host) for placeholders without defaults", view)
 	}
 }
 
@@ -1165,7 +1165,7 @@ func TestPlaceholder_ListShowsParamHintWithDefaultPrefix(t *testing.T) {
 	m := newModel("git push", placeholderStore(t), testConfig(t), testStyles())
 
 	view := m.View().Content
-	want := "[remote(default:origin), branch(default:main)]"
+	want := "(remote[default:origin], branch[default:main])"
 	if !strings.Contains(view, want) {
 		t.Fatalf("View() = %q, want list hint %q", view, want)
 	}
