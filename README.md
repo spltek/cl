@@ -258,7 +258,7 @@ The most common commands that need this pattern:
 **Example with `cd`:**
 
 ```
-ctrl+a → name: "go to project" → command: cd /Users/silvio/Projects/Memori/AIsuru && exec $SHELL
+ctrl+a → name: "go to project" → command: cd ~/projects/target-folder && exec $SHELL
 ```
 
 When you pick this command, `cl` runs it and replaces the current
