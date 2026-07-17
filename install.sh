@@ -2,14 +2,14 @@
 # Installs the latest (or a specific) cl release for macOS/Linux.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/silviopola/cl/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/spltek/cl/main/install.sh | sh
 #   curl -fsSL .../install.sh | sh -s v0.1.0        # install a specific tag
 #
 # Env vars:
 #   CL_INSTALL_DIR   Where to put the binary (default: $HOME/.local/bin)
 set -euo pipefail
 
-REPO="silviopola/cl"
+REPO="spltek/cl"
 INSTALL_DIR="${CL_INSTALL_DIR:-$HOME/.local/bin}"
 
 os="$(uname -s)"

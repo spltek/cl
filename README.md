@@ -64,23 +64,23 @@ separate "add"/"remove" subcommand to remember:
 ### Homebrew (macOS/Linux)
 
 ```bash
-brew install silviopola/tap/cl
+brew install spltek/tap/cl
 ```
 
 ### From a release (macOS/Linux)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/silviopola/cl/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/spltek/cl/main/install.sh | sh
 ```
 
 Downloads the right binary for your OS/arch from the
-[latest release](https://github.com/silviopola/cl/releases) into
+[latest release](https://github.com/spltek/cl/releases) into
 `~/.local/bin` (override with `CL_INSTALL_DIR`).
 
 ### From a release (Windows)
 
 ```powershell
-iwr https://raw.githubusercontent.com/silviopola/cl/main/install.ps1 | iex
+iwr https://raw.githubusercontent.com/spltek/cl/main/install.ps1 | iex
 ```
 
 Installs into `%LOCALAPPDATA%\cl\bin` (override with `CL_INSTALL_DIR`).

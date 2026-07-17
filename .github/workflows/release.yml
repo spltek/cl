@@ -28,7 +28,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # GITHUB_TOKEN is scoped to this repo only, so publishing the
-          # Homebrew formula to the separate silviopola/homebrew-tap repo
+          # Homebrew formula to the separate spltek/homebrew-tap repo
           # needs its own token with write access there. See README's
           # Install section for the repo used.
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

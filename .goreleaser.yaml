@@ -44,12 +44,12 @@ checksum:
 brews:
   - name: cl
     repository:
-      owner: silviopola
+      owner: spltek
       name: homebrew-tap
       branch: main
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     directory: Formula
-    homepage: "https://github.com/silviopola/cl"
+    homepage: "https://github.com/spltek/cl"
     description: "A tiny personal command launcher with an interactive picker"
     license: "MIT"
     test: |
@@ -65,10 +65,10 @@ changelog:
 
 release:
   github:
-    owner: silviopola
+    owner: spltek
     name: cl
   footer: >-
     ## Install
 
-    See the [README](https://github.com/silviopola/cl#install) for install
+    See the [README](https://github.com/spltek/cl#install) for install
     script usage, or download the archive for your platform below.
