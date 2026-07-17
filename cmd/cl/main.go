@@ -2,7 +2,7 @@
 // name -> shell command dictionary and lets you search it
 // interactively. Adding, editing, renaming and deleting commands all
 // happen inside the interactive picker itself
-// (ctrl+a/ctrl+e/ctrl+r/ctrl+d/ctrl+l) - see printUsage below. Enter
+// (ctrl+a/ctrl+e/ctrl+r/ctrl+d) - see printUsage below. Enter
 // always runs the picked command directly (after prompting for any
 // {{placeholders}}). Whether the list shows each entry's command
 // under its name is controlled by the picker's own ctrl+s toggle
@@ -166,7 +166,6 @@ Inside the picker:
   ctrl+r   rename the highlighted command
   ctrl+d   delete the highlighted command
   ctrl+s   toggle showing each command under its name in the list
-  ctrl+l   set how many list entries are visible (default 20)
   enter    run the highlighted command (prompts for {{placeholders}} first)
   esc      cancel`)
 }

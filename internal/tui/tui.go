@@ -270,6 +270,7 @@ func (m *model) cancelForm() {
 	m.pendingName = ""
 	m.pendingValue = ""
 	m.pendingErr = ""
+	m.target = store.Entry{}
 	m.selected = store.Entry{}
 }
 
