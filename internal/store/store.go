@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 )
 
@@ -22,13 +23,31 @@ const configDirEnv = "CL_CONFIG_DIR"
 
 // ConfigDir returns the directory where cl stores its data files,
 // creating it if it does not already exist.
+//
+// On Linux, commands are user data (not configuration), so we follow
+// the XDG Base Directory spec and use $XDG_DATA_HOME (~/.local/share)
+// instead of $XDG_CONFIG_HOME (~/.config).
 func ConfigDir() (string, error) {
 	dir := os.Getenv(configDirEnv)
 
 	if dir == "" {
-		base, err := os.UserConfigDir()
-		if err != nil {
-			return "", fmt.Errorf("resolve user config dir: %w", err)
+		var base string
+		switch runtime.GOOS {
+		case "linux":
+			// XDG data directory: $XDG_DATA_HOME or ~/.local/share
+			xdgData := os.Getenv("XDG_DATA_HOME")
+			if xdgData == "" {
+				home, _ := os.UserHomeDir()
+				xdgData = filepath.Join(home, ".local", "share")
+			}
+			base = xdgData
+		default:
+			// macOS, Windows, etc. — use the standard user config dir
+			var err error
+			base, err = os.UserConfigDir()
+			if err != nil {
+				return "", fmt.Errorf("resolve user config dir: %w", err)
+			}
 		}
 		dir = filepath.Join(base, "cl")
 	}
