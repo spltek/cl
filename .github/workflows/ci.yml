@@ -126,6 +126,15 @@ jobs:
           $env:PATH += ";$env:CL_INSTALL_DIR"
           [Environment]::SetEnvironmentVariable("PATH", $env:PATH, "Process")
 
+      - name: Verify binary runs before uninstall (Linux/macOS)
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        env:
+          CL_INSTALL_DIR: ${{ runner.temp }}/cl-test-install
+        run: |
+          "$CL_INSTALL_DIR/cl" --version
+          echo "✓ Binary runs successfully"
+
       - name: Run uninstall (Linux/macOS)
         if: matrix.os != 'windows-latest'
         shell: bash
@@ -133,6 +142,15 @@ jobs:
           CL_INSTALL_DIR: ${{ runner.temp }}/cl-test-install
         run: |
           bash uninstall.sh
+
+      - name: Verify binary runs before uninstall (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        env:
+          CL_INSTALL_DIR: ${{ runner.temp }}/cl-test-install
+        run: |
+          & "$env:CL_INSTALL_DIR\cl.exe" --version
+          Write-Host "✓ Binary runs successfully"
 
       - name: Run uninstall (Windows)
         if: matrix.os == 'windows-latest'
