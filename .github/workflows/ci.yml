@@ -72,3 +72,73 @@ jobs:
             echo "$unformatted"
             exit 1
           fi
+
+  install-test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Build binary
+        run: go build -o cl-bin ./cmd/cl
+
+      - name: Setup fake install (Linux/macOS)
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        env:
+          CL_INSTALL_DIR: ${{ runner.temp }}/cl-test-install
+        run: |
+          mkdir -p "$CL_INSTALL_DIR"
+          cp cl-bin "$CL_INSTALL_DIR/cl"
+          mkdir -p "$HOME/.config/cl"
+          echo '{"commands":{}}' > "$HOME/.config/cl/config.json"
+          export PATH="$CL_INSTALL_DIR:$PATH"
+          echo "PATH=$PATH" >> $GITHUB_ENV
+
+      - name: Setup fake install (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        env:
+          CL_INSTALL_DIR: ${{ runner.temp }}/cl-test-install
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:CL_INSTALL_DIR" | Out-Null
+          Copy-Item "cl-bin.exe" "$env:CL_INSTALL_DIR\cl.exe"
+          New-Item -ItemType Directory -Force -Path "$env:APPDATA\cl" | Out-Null
+          '{"commands":{}}' | Out-File -FilePath "$env:APPDATA\cl\config.json" -Encoding utf8
+          $env:PATH += ";$env:CL_INSTALL_DIR"
+          [Environment]::SetEnvironmentVariable("PATH", $env:PATH, "Process")
+
+      - name: Run uninstall and verify cleanup
+        env:
+          CL_INSTALL_DIR: ${{ runner.temp }}/cl-test-install
+        run: |
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            pwsh -File uninstall.ps1
+          else
+            bash uninstall.sh
+          fi
+
+      - name: Verify binary removed
+        env:
+          CL_INSTALL_DIR: ${{ runner.temp }}/cl-test-install
+        run: |
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            test ! -f "$CL_INSTALL_DIR/cl.exe" && echo "✓ Binary removed" || (echo "✗ Binary still exists" && exit 1)
+          else
+            test ! -f "$CL_INSTALL_DIR/cl" && echo "✓ Binary removed" || (echo "✗ Binary still exists" && exit 1)
+          fi
+
+      - name: Verify config removed
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            test ! -d "$env:APPDATA/cl" && echo "✓ Config removed" || (echo "✗ Config still exists" && exit 1)
+          else
+            test ! -d "$HOME/.config/cl" && echo "✓ Config removed" || (echo "✗ Config still exists" && exit 1)
+          fi
