@@ -156,7 +156,11 @@ jobs:
         env:
           CL_INSTALL_DIR: ${{ runner.temp }}/cl-test-install
         run: |
-          test ! (Test-Path "$env:CL_INSTALL_DIR\cl.exe") && Write-Host "✓ Binary removed" || { Write-Host "✗ Binary still exists"; exit 1 }
+          if (Test-Path "$env:CL_INSTALL_DIR\cl.exe") {
+            Write-Host "✗ Binary still exists"
+            exit 1
+          }
+          Write-Host "✓ Binary removed"
 
       - name: Verify config removed (Linux/macOS)
         if: matrix.os != 'windows-latest'
@@ -173,4 +177,8 @@ jobs:
         if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
-          test ! (Test-Path "$env:APPDATA\cl") && Write-Host "✓ Config removed" || { Write-Host "✗ Config still exists"; exit 1 }
+          if (Test-Path "$env:APPDATA\cl") {
+            Write-Host "✗ Config still exists"
+            exit 1
+          }
+          Write-Host "✓ Config removed"
