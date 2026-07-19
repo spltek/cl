@@ -115,6 +115,30 @@ start using `cl` in the current shell without restarting it.
 > If you prefer to manage the binary yourself, `make build` compiles
 > into `bin/cl` and `make install` puts it into `$GOPATH/bin`.
 
+## Uninstall
+
+### Homebrew (macOS/Linux)
+
+```bash
+brew uninstall cl
+```
+
+### From a release (macOS/Linux)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/spltek/cl/main/uninstall.sh | sh
+```
+
+Removes the binary and config directory (`~/.local/bin/cl` and `~/.config/cl` or `~/Library/Application Support/cl`).
+
+### From a release (Windows)
+
+```powershell
+iwr https://raw.githubusercontent.com/spltek/cl/main/uninstall.ps1 -UseBasicParsing | iex
+```
+
+Removes the binary, config directory (`%APPDATA%\cl`), and cleans up the install directory from your `PATH`.
+
 ### Releasing (maintainers)
 
 Releases are built and published automatically by
