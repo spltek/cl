@@ -120,6 +120,42 @@ func TestSaveAndLoadRoundTrip(t *testing.T) {
 	}
 }
 
+func TestSave_OverwritesExistingFile(t *testing.T) {
+	withTempConfigDir(t)
+
+	s, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	// First save: create the file.
+	s.Set("a", "echo a")
+	if err := s.Save(); err != nil {
+		t.Fatalf("first Save() error = %v", err)
+	}
+
+	// Second save: overwrite the now-existing file with different content.
+	s.Set("b", "echo b")
+	if err := s.Save(); err != nil {
+		t.Fatalf("second Save() (overwrite) error = %v", err)
+	}
+
+	// Verify both entries survive the round trip.
+	reloaded, err := Load()
+	if err != nil {
+		t.Fatalf("Load() after overwrite error = %v", err)
+	}
+
+	cmd, ok := reloaded.Get("a")
+	if !ok || cmd != "echo a" {
+		t.Fatalf("Get(a) after overwrite = (%q, %v), want (%q, true)", cmd, ok, "echo a")
+	}
+	cmd, ok = reloaded.Get("b")
+	if !ok || cmd != "echo b" {
+		t.Fatalf("Get(b) after overwrite = (%q, %v), want (%q, true)", cmd, ok, "echo b")
+	}
+}
+
 func TestList_SortedByName(t *testing.T) {
 	withTempConfigDir(t)
 

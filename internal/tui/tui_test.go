@@ -733,6 +733,9 @@ func TestShowCommand_CtrlSTogglesAndPersistsSetting(t *testing.T) {
 	if m.cfg.ShowCommand() {
 		t.Fatalf("ShowCommand() after a second ctrl+s = true, want false")
 	}
+	if m.pendingErr != "" {
+		t.Fatalf("pendingErr after second toggle = %q, want empty (Save on overwrite should succeed)", m.pendingErr)
+	}
 	if strings.Contains(m.View().Content, "npm run build") {
 		t.Errorf("View() = %q, want it to hide the command again after toggling back off", m.View().Content)
 	}
