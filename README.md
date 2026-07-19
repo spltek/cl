@@ -80,7 +80,7 @@ Downloads the right binary for your OS/arch from the
 ### From a release (Windows)
 
 ```powershell
-iwr https://raw.githubusercontent.com/spltek/cl/main/install.ps1 | iex
+iwr https://raw.githubusercontent.com/spltek/cl/main/install.ps1 -UseBasicParsing | iex
 ```
 
 Installs into `%LOCALAPPDATA%\cl\bin` (override with `CL_INSTALL_DIR`).
