@@ -98,15 +98,13 @@ jobs:
           cp cl-bin "$CL_INSTALL_DIR/cl"
           # macOS uses ~/Library/Application Support/cl, Linux uses ~/.config/cl
           if [ "${{ matrix.os }}" = "macos-latest" ]; then
-            CONFIG_DIR="$HOME/Library/Application Support/cl"
+            export CONFIG_DIR="$HOME/Library/Application Support/cl"
           else
-            CONFIG_DIR="$HOME/.config/cl"
+            export CONFIG_DIR="$HOME/.config/cl"
           fi
           mkdir -p "$CONFIG_DIR"
           echo '{"commands":{}}' > "$CONFIG_DIR/config.json"
           export PATH="$CL_INSTALL_DIR:$PATH"
-          echo "PATH=$PATH" >> $GITHUB_ENV
-          echo "CONFIG_DIR=$CONFIG_DIR" >> $GITHUB_ENV
 
       - name: Setup fake install (Windows)
         if: matrix.os == 'windows-latest'
@@ -124,6 +122,7 @@ jobs:
       - name: Run uninstall and verify cleanup
         env:
           CL_INSTALL_DIR: ${{ runner.temp }}/cl-test-install
+          CONFIG_DIR: ${{ runner.temp }}/cl-test-config
         run: |
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
             pwsh -File uninstall.ps1
@@ -147,5 +146,11 @@ jobs:
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
             test ! -d "$env:APPDATA/cl" && echo "✓ Config removed" || (echo "✗ Config still exists" && exit 1)
           else
-            test ! -d "$CONFIG_DIR" && echo "✓ Config removed" || (echo "✗ Config still exists" && exit 1)
+            # Re-compute the correct config dir for verification
+            if [ "${{ matrix.os }}" = "macos-latest" ]; then
+              VERIFY_DIR="$HOME/Library/Application Support/cl"
+            else
+              VERIFY_DIR="$HOME/.config/cl"
+            fi
+            test ! -d "$VERIFY_DIR" && echo "✓ Config removed" || (echo "✗ Config still exists" && exit 1)
           fi
