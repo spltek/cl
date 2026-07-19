@@ -84,7 +84,7 @@ iwr https://raw.githubusercontent.com/spltek/cl/main/install.ps1 | iex
 ```
 
 Installs into `%LOCALAPPDATA%\cl\bin` (override with `CL_INSTALL_DIR`).
-Make sure this directory is on your `PATH` after installing.
+The installer automatically adds the install directory to your `PATH`, so `cl` is ready to use immediately.
 
 #### Special permissions?
 
