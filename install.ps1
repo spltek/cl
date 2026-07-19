@@ -52,5 +52,15 @@ finally {
 }
 
 Write-Host "Installed cl $Tag to $InstallDir\cl.exe"
+
+# Add to current session PATH so cl works immediately
+$env:PATH += ";$InstallDir"
+
+# Add to user PATH permanently (avoid duplicates)
+$currentPath = [Environment]::GetEnvironmentVariable("PATH", "User")
+if ($currentPath -notlike "*$InstallDir*") {
+    [Environment]::SetEnvironmentVariable("PATH", "$currentPath;$InstallDir", "User")
+}
+
 Write-Host ""
-Write-Host "Done. Make sure $InstallDir is on your PATH, then cl is ready to use."
+Write-Host "Done. cl is ready to use."
