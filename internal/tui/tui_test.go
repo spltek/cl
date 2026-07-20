@@ -841,8 +841,8 @@ func TestView_EmptyListOnlyMentionsAdd(t *testing.T) {
 	if strings.Contains(view, "ctrl+e") || strings.Contains(view, "ctrl+r") || strings.Contains(view, "ctrl+d") {
 		t.Errorf("View() = %q, want it not to mention edit/rename/delete when the list is empty", view)
 	}
-	if !strings.Contains(view, "no matching commands") {
-		t.Errorf("View() = %q, want it to mention there are no matching commands", view)
+	if !strings.Contains(view, "empty list") {
+		t.Errorf("View() = %q, want it to mention the list is empty", view)
 	}
 }
 

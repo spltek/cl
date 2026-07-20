@@ -791,7 +791,10 @@ func (m model) viewList() tea.View {
 		listContent.WriteString("\n")
 	}
 
-	if len(m.filtered) == 0 {
+	if len(m.all) == 0 {
+		listContent.WriteString(m.styles.help.Render("  empty list"))
+		listContent.WriteString("\n")
+	} else if len(m.filtered) == 0 {
 		listContent.WriteString(m.styles.help.Render("  no matching commands"))
 		listContent.WriteString("\n")
 	}
