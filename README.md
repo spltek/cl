@@ -59,7 +59,7 @@ separate "add"/"remove" subcommand to remember:
   Linux, `%AppData%\cl` on Windows) — written to disk immediately as
   each add/edit/remove is confirmed, not just when quit.
 
-<video src="media/cl.mp4" controls width="100%"></video>
+[<img src="media/cl.png" alt="Guarda il video demo" width="100%">](https://raw.githubusercontent.com/spltek/cl/main/media/cl.mp4)
 
 ## Install
 
