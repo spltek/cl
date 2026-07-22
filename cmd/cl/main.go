@@ -82,7 +82,7 @@ func runInteractive(filter string) error {
 		return err
 	}
 
-	entry, err := tui.Run(filter, s, cfg)
+	entry, err := tui.Run(filter, s, cfg, version)
 	if err != nil {
 		return err
 	}

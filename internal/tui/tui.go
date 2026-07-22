@@ -138,6 +138,7 @@ type model struct {
 	selected store.Entry
 	quitting bool
 	styles   styles
+	version  string // set by Run(), empty means no header
 
 	// width is the known terminal width (0 until the first
 	// tea.WindowSizeMsg arrives). It's applied to input/form via
@@ -190,19 +191,14 @@ func (m *model) setForm(ta textarea.Model) {
 	m.applyWidth()
 }
 
-// applyWidth constrains input/form to the known terminal width -
-// textarea.SetWidth already accounts for its own prompt internally
-// - so that a value that would otherwise overflow the terminal
-// word-wraps onto extra rows of its own instead of onto the
-// terminal's next row. It's a no-op until the first
-// tea.WindowSizeMsg is known, and must be re-applied any time form
-// is replaced with a fresh textarea.Model (each add/edit/rename
-// sub-step does).
+// applyWidth constrains input/form to the known terminal width.
+// The filter input is narrower to fit inside the bordered box.
 func (m *model) applyWidth() {
 	if m.width <= 0 {
 		return
 	}
-	m.input.SetWidth(m.width)
+	// Filter sits inside the box (2 border chars).
+	m.input.SetWidth(m.width - 2)
 	m.form.SetWidth(m.width)
 }
 
@@ -319,6 +315,57 @@ func (m *model) startFillPlaceholders(e store.Entry, phs []placeholder) {
 	m.setForm(newTextArea("> ", "value"))
 	m.form.SetValue(m.phVals[0])
 	m.form.CursorEnd()
+}
+
+// headerView renders a colorful ASCII logo with the "cl" letters
+// and the command launcher version string. It returns an empty
+// string when no version is set (tests, for example).
+func (m model) headerView() string {
+	if m.version == "" {
+		return ""
+	}
+
+	type logoPart struct{ c, l string }
+	parts := []logoPart{
+		{c: " ██████╗", l: " ██╗"},
+		{c: "██╔════╝", l: " ██║"},
+		{c: "██║     ", l: " ██║"},
+		{c: "██║     ", l: " ██║"},
+		{c: "╚██████╗", l: " ███████╗"},
+		{c: " ╚═════╝", l: " ╚══════╝"},
+	}
+
+	cStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212"))
+	lStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39"))
+	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("246"))
+	verStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+
+	versionStr := fmt.Sprintf("v%s - SPLTek", m.version)
+
+	var b strings.Builder
+	for i, p := range parts {
+		b.WriteString(cStyle.Render(p.c))
+		b.WriteString(lStyle.Render(p.l))
+		switch i {
+		case 0:
+			b.WriteString("  ")
+			b.WriteString(titleStyle.Render("Command Launcher"))
+		case 1:
+			b.WriteString("  ")
+			b.WriteString(verStyle.Render(versionStr))
+		}
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+// headerHeight returns the number of terminal rows consumed by the
+// header view, or 0 when no header is shown (version is empty).
+func (m model) headerHeight() int {
+	if m.version == "" {
+		return 0
+	}
+	return strings.Count(m.headerView(), "\n")
 }
 
 // toggleShowCommand flips and persists the showCommand setting,
@@ -454,34 +501,29 @@ func (m model) visibleRows() int {
 		return 20
 	}
 
-	// The filter input can word-wrap onto multiple rows in narrow
-	// terminals; account for its actual rendered height so the list
-	// chrome budget doesn't get overstated and push content off the
-	// bottom of the screen. Similarly, the help text at the bottom
-	// has a variable number of lines (5-8 depending on whether the
-	// list is empty) and may word-wrap in narrow terminals — compute
-	// its real height instead of assuming a fixed chrome budget.
-	inputHeight := 1 // fallback when width is unknown
+	// The filter input is now inside the box, so its height is part
+	// of the box content. Account for its rendered height so the list
+	// doesn't overflow.
+	filterHeight := 1 // fallback when width is unknown
 	if m.width > 0 {
-		inputHeight = lipgloss.Height(m.input.View())
+		filterHeight = lipgloss.Height(m.input.View())
 	}
 
-	// Dynamic chrome: 2 border rows (top + bottom) + 1 gap row +
-	// help text height (variable line count + possible word-wrap).
-	chrome := 3 // borders + gap
+	// Box chrome: top border (1) + separator (1) + bottom border (1) = 3.
+	// Plus help text height.
+	boxChrome := 3
 	if m.width > 0 {
-		chrome += lipgloss.Height(m.wrapStyled(m.styles.help, m.listHelp()))
+		boxChrome += lipgloss.Height(m.wrapStyled(m.styles.help, m.listHelp()))
 	} else {
-		chrome += strings.Count(m.listHelp(), "\n") + 1
+		boxChrome += strings.Count(m.listHelp(), "\n") + 1
 	}
-	availLines := m.height - inputHeight - chrome
+	availLines := m.height - filterHeight - boxChrome - m.headerHeight()
 	if availLines < 1 {
 		availLines = 1
 	}
 
 	perEntry := 1
 	if m.cfg.ShowCommand() {
-		// name + command + spacer between entries
 		perEntry = 3
 	}
 	availEntries := availLines / perEntry
@@ -705,116 +747,111 @@ func (m model) View() tea.View {
 	return v
 }
 
+// writeBoxRow writes a single row inside the bordered box: left border,
+// content padded to innerWidth, right border, newline. When width is
+// unknown (m.width <= 0), borders are omitted.
+func (m model) writeBoxRow(b *strings.Builder, bs lipgloss.Style, innerWidth int, line string) {
+	if m.width > 0 {
+		b.WriteString(bs.Render("│"))
+		b.WriteString(lipgloss.NewStyle().Width(innerWidth).Render(line))
+		b.WriteString(bs.Render("│"))
+	} else {
+		b.WriteString(line)
+	}
+	b.WriteString("\n")
+}
+
+// writeListEntry renders a single entry inside the box: name line
+// (with optional placeholder hint) and, when showCommand is on, the
+// command itself indented underneath followed by a blank spacer row.
+func (m model) writeListEntry(b *strings.Builder, bs lipgloss.Style, innerWidth int, entry store.Entry, isSelected bool) {
+	prefix := "  "
+	if isSelected {
+		prefix = "> "
+	}
+
+	// Name line.
+	name := entry.Name
+	if isSelected {
+		name = m.styles.selected.Render(name)
+	}
+	if phs := parsePlaceholders(entry.Command); len(phs) > 0 {
+		name += " " + m.styles.paramHint.Render(buildParamHint(phs))
+	}
+	m.writeBoxRow(b, bs, innerWidth, prefix+name)
+
+	// Command line(s).
+	if m.cfg.ShowCommand() {
+		cmdIndent := strings.Repeat(" ", lipgloss.Width(prefix))
+		cmdText := m.styles.command.Render(entry.Command)
+		if m.width > 0 {
+			wrapWidth := innerWidth - lipgloss.Width(cmdIndent)
+			if wrapWidth < 10 {
+				wrapWidth = 10
+			}
+			for _, wl := range strings.Split(lipgloss.NewStyle().Width(wrapWidth).Render(cmdText), "\n") {
+				m.writeBoxRow(b, bs, innerWidth, cmdIndent+wl)
+			}
+		} else {
+			m.writeBoxRow(b, bs, innerWidth, cmdIndent+cmdText)
+		}
+		// Blank spacer between entries when commands are shown.
+		m.writeBoxRow(b, bs, innerWidth, "")
+	}
+}
+
 func (m model) viewList() tea.View {
 	var b strings.Builder
 
-	b.WriteString(m.input.View())
-	b.WriteString("\n")
+	b.WriteString(m.headerView())
 
-	// Build the list content to go inside the bordered box.
-	var listContent strings.Builder
+	innerWidth := m.width - 2
+	if innerWidth < 10 {
+		innerWidth = 10
+	}
+	bs := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 
-	// Content width accounts for the border (2 chars: left + right).
-	contentWidth := m.width
-	if contentWidth > 0 {
-		contentWidth -= 2
-		if contentWidth < 10 {
-			contentWidth = 10
-		}
+	// Box: top border, filter, separator.
+	if m.width > 0 {
+		b.WriteString(bs.Render("┌" + strings.Repeat("─", innerWidth) + "┐"))
+		b.WriteString("\n")
+	}
+	for _, line := range strings.Split(strings.TrimRight(m.input.View(), "\n"), "\n") {
+		m.writeBoxRow(&b, bs, innerWidth, line)
+	}
+	if m.width > 0 {
+		b.WriteString(bs.Render("├" + strings.Repeat("─", innerWidth) + "┤"))
+		b.WriteString("\n")
 	}
 
+	// List entries.
 	maxRows := m.visibleRows()
 	end := m.scroll + maxRows
 	if end > len(m.filtered) {
 		end = len(m.filtered)
 	}
 
-	// Scroll indicators so the user knows there are items off-screen.
-	hasAbove := m.scroll > 0
-	hasBelow := end < len(m.filtered)
-
-	if hasAbove {
-		listContent.WriteString(m.styles.help.Render("  ↑ more above"))
-		listContent.WriteString("\n")
+	if m.scroll > 0 {
+		m.writeBoxRow(&b, bs, innerWidth, m.styles.help.Render("  ↑ more above"))
 	}
-
 	for i := m.scroll; i < end; i++ {
-		entry := m.filtered[i]
-
-		prefix := "  "
-		if i == m.cursor {
-			prefix = "> "
-		}
-
-		// Name line.
-		name := entry.Name
-		if i == m.cursor {
-			name = m.styles.selected.Render(name)
-		}
-		// Append parameter hint when the command has placeholders.
-		if phs := parsePlaceholders(entry.Command); len(phs) > 0 {
-			name += " " + m.styles.paramHint.Render(buildParamHint(phs))
-		}
-		listContent.WriteString(prefix + name)
-		listContent.WriteString("\n")
-
-		// Command line(s), indented under the name and word-wrapped.
-		// The indent always uses spaces (never ">") so continuation
-		// lines align under the command, not under the cursor arrow.
-		if m.cfg.ShowCommand() {
-			cmdIndent := strings.Repeat(" ", lipgloss.Width(prefix))
-			cmdText := m.styles.command.Render(entry.Command)
-			if m.width > 0 {
-				wrapWidth := contentWidth - lipgloss.Width(cmdIndent)
-				if wrapWidth < 10 {
-					wrapWidth = 10
-				}
-				wrapped := lipgloss.NewStyle().Width(wrapWidth).Render(cmdText)
-				for _, wl := range strings.Split(wrapped, "\n") {
-					listContent.WriteString(cmdIndent + wl)
-					listContent.WriteString("\n")
-				}
-			} else {
-				listContent.WriteString(cmdIndent + cmdText)
-				listContent.WriteString("\n")
-			}
-		}
-
-		// Extra spacing between multi-line entries (showCommand on).
-		if m.cfg.ShowCommand() {
-			listContent.WriteString("\n")
-		}
+		m.writeListEntry(&b, bs, innerWidth, m.filtered[i], i == m.cursor)
 	}
-
-	if hasBelow {
-		listContent.WriteString(m.styles.help.Render("  ↓ more below"))
-		listContent.WriteString("\n")
+	if end < len(m.filtered) {
+		m.writeBoxRow(&b, bs, innerWidth, m.styles.help.Render("  ↓ more below"))
 	}
 
 	if len(m.all) == 0 {
-		listContent.WriteString(m.styles.help.Render("  empty list"))
-		listContent.WriteString("\n")
+		m.writeBoxRow(&b, bs, innerWidth, m.styles.help.Render("  empty list"))
 	} else if len(m.filtered) == 0 {
-		listContent.WriteString(m.styles.help.Render("  no matching commands"))
-		listContent.WriteString("\n")
+		m.writeBoxRow(&b, bs, innerWidth, m.styles.help.Render("  no matching commands"))
 	}
 
-	// Trim trailing newlines so the last item sits close to the bottom border.
-	content := strings.TrimRight(listContent.String(), "\n")
-
-	// Wrap list content in a subtle gray bordered box that spans the
-	// full terminal width and adapts its height to the content.
+	// Box: bottom border.
 	if m.width > 0 {
-		boxed := lipgloss.NewStyle().
-			Border(lipgloss.NormalBorder()).
-			BorderForeground(lipgloss.Color("240")).
-			Width(m.width).
-			Render(content)
-		b.WriteString(boxed)
-	} else {
-		b.WriteString(listContent.String())
+		b.WriteString(bs.Render("└" + strings.Repeat("─", innerWidth) + "┘"))
+		b.WriteString("\n")
 	}
-	b.WriteString("\n")
 
 	if m.pendingErr != "" {
 		b.WriteString(m.wrapStyled(m.styles.errMsg, m.pendingErr))
@@ -824,7 +861,11 @@ func (m model) viewList() tea.View {
 	b.WriteString(m.listHelp())
 
 	v := tea.NewView(b.String())
-	v.Cursor = m.input.Cursor() // the filter input always starts at row 0
+	if c := m.input.Cursor(); c != nil {
+		c.Y += m.headerHeight() + 1 // header rows + top border
+		c.X += 1                     // left border "│"
+		v.Cursor = c
+	}
 	return v
 }
 
@@ -948,7 +989,7 @@ func (m model) viewFillPlaceholders() tea.View {
 // independently of the final selection. cfg.ShowCommand (toggled
 // in-picker with ctrl+s, persisted immediately) controls whether the
 // list shows each entry's command next to its name.
-func Run(initialFilter string, st *store.Store, cfg *store.Config) (store.Entry, error) {
+func Run(initialFilter string, st *store.Store, cfg *store.Config, version string) (store.Entry, error) {
 	ttyIn, ttyOut, err := tea.OpenTTY()
 	if err != nil {
 		return store.Entry{}, fmt.Errorf("open controlling terminal: %w", err)
@@ -957,6 +998,7 @@ func Run(initialFilter string, st *store.Store, cfg *store.Config) (store.Entry,
 	defer ttyOut.Close()
 
 	m := newModel(initialFilter, st, cfg, newStyles())
+	m.version = version
 
 	p := tea.NewProgram(m, tea.WithInput(ttyIn), tea.WithOutput(ttyOut))
 

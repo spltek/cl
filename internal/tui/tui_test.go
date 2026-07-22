@@ -973,8 +973,160 @@ func TestWidth_WindowSizeConstrainsFilterInput(t *testing.T) {
 
 	m, _ = update(m, tea.WindowSizeMsg{Width: 20, Height: 24})
 
-	if got, want := m.input.Width(), 20-lipgloss.Width(m.input.Prompt); got != want {
+	// Filter sits inside the bordered box: width - 2 (borders) - prompt.
+	if got, want := m.input.Width(), 20-2-lipgloss.Width(m.input.Prompt); got != want {
 		t.Fatalf("input.Width() = %d, want %d", got, want)
+	}
+}
+
+func TestView_CursorPositionInsideBox(t *testing.T) {
+	m := newModel("", testStore(t), testConfig(t), testStyles())
+	m.version = "test" // enable header
+	m, _ = update(m, tea.WindowSizeMsg{Width: 80, Height: 24})
+
+	v := m.View()
+	if v.Cursor == nil {
+		t.Fatal("View().Cursor is nil, want non-nil cursor for the filter input")
+	}
+
+	// Cursor X: prompt width ("cl> " = 4) + 1 (left border "│") = 5.
+	if wantX := 4 + 1; v.Cursor.X != wantX {
+		t.Errorf("View().Cursor.X = %d, want %d (prompt + left border)", v.Cursor.X, wantX)
+	}
+
+	// Cursor Y: headerHeight (6) + 1 (top border) + textarea cursor Y (0) = 7.
+	if wantY := m.headerHeight() + 1; v.Cursor.Y != wantY {
+		t.Errorf("View().Cursor.Y = %d, want %d (header + top border)", v.Cursor.Y, wantY)
+	}
+}
+
+func TestView_CursorHiddenWhenHeaderDisabled(t *testing.T) {
+	m := newModel("", testStore(t), testConfig(t), testStyles())
+	// m.version is empty → no header, so headerHeight() returns 0.
+	m, _ = update(m, tea.WindowSizeMsg{Width: 80, Height: 24})
+
+	v := m.View()
+	if v.Cursor == nil {
+		t.Fatal("View().Cursor is nil, want cursor even without header")
+	}
+
+	// Without header, the filter is still inside the box at row 1 (top border).
+	if v.Cursor.Y != 1 {
+		t.Errorf("View().Cursor.Y = %d, want 1 (top border only, no header)", v.Cursor.Y)
+	}
+}
+
+func TestView_BoxContainsFilterAndSeparator(t *testing.T) {
+	m := newModel("", testStore(t), testConfig(t), testStyles())
+	m, _ = update(m, tea.WindowSizeMsg{Width: 80, Height: 24})
+
+	view := m.View().Content
+
+	// The filter input with its "cl> " prompt must be inside the box.
+	if !strings.Contains(view, "cl>") {
+		t.Error("View() does not contain filter prompt 'cl>'")
+	}
+
+	// The separator must be present between filter and list.
+	if !strings.Contains(view, "├") || !strings.Contains(view, "┤") {
+		t.Error("View() does not contain box separator '├──┤'")
+	}
+
+	// Verify the order: cl> comes before the separator, separator before entries.
+	clIdx := strings.Index(view, "cl>")
+	sepIdx := strings.Index(view, "├")
+	entryIdx := strings.Index(view, "backup")
+
+	if clIdx == -1 || sepIdx == -1 || entryIdx == -1 {
+		t.Fatal("missing expected elements in view")
+	}
+	if !(clIdx < sepIdx && sepIdx < entryIdx) {
+		t.Errorf("wrong order: cl> at %d, separator at %d, backup at %d; want cl> < separator < entry", clIdx, sepIdx, entryIdx)
+	}
+}
+
+func TestView_BoxTopAndBottomBorders(t *testing.T) {
+	m := newModel("", testStore(t), testConfig(t), testStyles())
+	m, _ = update(m, tea.WindowSizeMsg{Width: 80, Height: 24})
+
+	view := m.View().Content
+
+	if !strings.Contains(view, "┌") {
+		t.Error("View() does not contain top-left box corner '┌'")
+	}
+	if !strings.Contains(view, "└") {
+		t.Error("View() does not contain bottom-left box corner '└'")
+	}
+}
+
+func TestView_EmptyBoxShowsEmptyMessage(t *testing.T) {
+	m := newModel("", emptyStore(t), testConfig(t), testStyles())
+	m, _ = update(m, tea.WindowSizeMsg{Width: 80, Height: 24})
+
+	view := m.View().Content
+
+	if !strings.Contains(view, "empty list") {
+		t.Error("View() does not contain 'empty list' message")
+	}
+	// The empty message must be inside the box (between separator and bottom border).
+	sepIdx := strings.Index(view, "├")
+	emptyIdx := strings.Index(view, "empty list")
+	bottomIdx := strings.Index(view, "└")
+	if !(sepIdx < emptyIdx && emptyIdx < bottomIdx) {
+		t.Errorf("wrong order: separator at %d, 'empty list' at %d, bottom at %d", sepIdx, emptyIdx, bottomIdx)
+	}
+}
+
+func TestWriteListEntry_SelectedVsUnselected(t *testing.T) {
+	m := newModel("", testStore(t), testConfig(t), testStyles())
+	m, _ = update(m, tea.WindowSizeMsg{Width: 80, Height: 24})
+
+	var b strings.Builder
+	bs := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	entry := store.Entry{Name: "test", Command: "echo hi"}
+
+	// Unselected.
+	m.writeListEntry(&b, bs, 78, entry, false)
+	unsel := b.String()
+	b.Reset()
+
+	// Selected.
+	m.writeListEntry(&b, bs, 78, entry, true)
+	sel := b.String()
+
+	// Selected should have the "> " prefix; unselected should have "  ".
+	// Both include styled content so we look for the raw arrow.
+	if !strings.Contains(sel, "> ") {
+		t.Error("selected entry does not contain '> ' cursor")
+	}
+	if strings.Contains(unsel, "> test") {
+		t.Error("unselected entry should not contain '> ' before the name")
+	}
+}
+
+func TestWriteListEntry_ShowsCommandWhenEnabled(t *testing.T) {
+	m := newModel("", testStore(t), testConfig(t), testStyles())
+	m, _ = update(m, tea.WindowSizeMsg{Width: 80, Height: 24})
+
+	var b strings.Builder
+	bs := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	entry := store.Entry{Name: "test", Command: "echo hi"}
+
+	// With ShowCommand off: only the name line.
+	m.writeListEntry(&b, bs, 78, entry, false)
+	without := b.String()
+	b.Reset()
+
+	// With ShowCommand on: name + command + blank line.
+	m.cfg.SetShowCommand(true)
+	m.writeListEntry(&b, bs, 78, entry, false)
+	with := b.String()
+
+	if !strings.Contains(with, "echo hi") {
+		t.Error("ShowCommand=true does not contain command text")
+	}
+	if strings.Contains(without, "echo hi") {
+		t.Error("ShowCommand=false should not contain command text")
 	}
 }
 
