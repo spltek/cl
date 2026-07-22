@@ -863,7 +863,7 @@ func (m model) viewList() tea.View {
 	v := tea.NewView(b.String())
 	if c := m.input.Cursor(); c != nil {
 		c.Y += m.headerHeight() + 1 // header rows + top border
-		c.X += 1                     // left border "│"
+		c.X += 1                    // left border "│"
 		v.Cursor = c
 	}
 	return v
