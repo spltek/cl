@@ -59,7 +59,7 @@ separate "add"/"remove" subcommand to remember:
   Linux, `%AppData%\cl` on Windows) — written to disk immediately as
   each add/edit/remove is confirmed, not just when quit.
 
-https://github.com/user-attachments/assets/344fd906-2fe2-4b15-a952-1159c1626a9d
+https://github.com/user-attachments/assets/59bba6b9-573e-4b95-ac08-251a9d5dbd0f
 
 ## Install
 
