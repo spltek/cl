@@ -123,18 +123,17 @@ func runDirectly(entry store.Entry) error {
 	return cmd.Run()
 }
 
-// printExecuting announces, on the controlling terminal, which
-// command is about to run, with its name picked out in color. w is
-// wrapped in a colorprofile.Writer so the color is automatically
-// downgraded (or dropped, honoring NO_COLOR) to whatever w actually
-// supports, the same way Bubble Tea itself does for the picker.
+// printExecuting announces, on the controlling terminal, that cl
+// is about to run a command. The entire line is rendered in the
+// same color used for the selected entry in the picker (pink/212).
 func printExecuting(w io.Writer, entry store.Entry) {
-	nameStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212"))
-	line := "> Execute: " + nameStyle.Render(entry.Name)
+	sty := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212"))
+	paramStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+	line := sty.Render("> cl-exec: " + entry.Name)
 	if len(entry.Params) > 0 {
-		line += " (" + strings.Join(entry.Params, ", ") + ")"
+		line += " " + paramStyle.Render("("+strings.Join(entry.Params, ", ")+")")
 	}
-	fmt.Fprintln(colorprofile.NewWriter(w, nil), line)
+	fmt.Fprintln(colorprofile.NewWriter(w, os.Environ()), line)
 }
 
 // shellCommand returns the shell binary and arguments used to run

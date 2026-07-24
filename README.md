@@ -233,7 +233,7 @@ enter run · esc cancel
 
 # Type the host and press Enter — the resolved command runs:
 
-> Execute: ssh server (admin, prod.example.com)
+> cl-exec: ssh server (admin, prod.example.com)
 Last login: ...
 ```
 
@@ -336,7 +336,7 @@ esc cancel
 # press Enter on "build": cl announces the name (colored) before
 # running it, then the command's own output follows normally
 
-> Execute: build
+> cl-exec: build
 ...(build output)...
 
 # press ctrl+s to show commands in the list (display-only —

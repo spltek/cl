@@ -1305,6 +1305,9 @@ func TestPlaceholder_EnterOnCommandWithoutPlaceholdersBehavesNormally(t *testing
 	if m.selected.Name != "build" {
 		t.Fatalf("selected.Name = %q, want %q", m.selected.Name, "build")
 	}
+	if m.selected.Params != nil {
+		t.Fatalf("selected.Params = %v, want nil for command without placeholders", m.selected.Params)
+	}
 }
 
 func TestPlaceholder_ListShowsParamHintWithoutDefaults(t *testing.T) {
@@ -1489,6 +1492,9 @@ func TestPlaceholder_EscReturnsToList(t *testing.T) {
 	}
 	if m.selected.Command != "" {
 		t.Fatalf("selected.Command = %q, want empty after cancel", m.selected.Command)
+	}
+	if m.selected.Params != nil {
+		t.Fatalf("selected.Params = %v, want nil after cancel", m.selected.Params)
 	}
 }
 

@@ -36,8 +36,8 @@ func TestPrintExecuting_AnnouncesTheEntryName(t *testing.T) {
 	printExecuting(&buf, store.Entry{Name: "build"})
 
 	got := buf.String()
-	if !strings.Contains(got, "> Execute:") {
-		t.Fatalf("printExecuting output = %q, want it to contain %q", got, "> Execute:")
+	if !strings.Contains(got, "> cl-exec:") {
+		t.Fatalf("printExecuting output = %q, want it to contain %q", got, "> cl-exec:")
 	}
 	if !strings.Contains(got, "build") {
 		t.Fatalf("printExecuting output = %q, want it to contain the entry name %q", got, "build")
@@ -60,6 +60,86 @@ func TestPrintExecuting_ShowsParamsInParentheses(t *testing.T) {
 	if !strings.Contains(got, "(hello)") {
 		t.Fatalf("printExecuting output with single param = %q, want it to contain %q", got, "(hello)")
 	}
+}
+
+func TestPrintExecuting_NoParamsDoesNotShowParentheses(t *testing.T) {
+	var buf bytes.Buffer
+	printExecuting(&buf, store.Entry{Name: "build"})
+
+	got := buf.String()
+	if strings.Contains(got, "()") {
+		t.Fatalf("printExecuting output = %q, want no empty parentheses", got)
+	}
+	if strings.Contains(got, "(") || strings.Contains(got, ")") {
+		t.Fatalf("printExecuting output = %q, want no parentheses at all when there are no params", got)
+	}
+}
+
+func TestPrintExecuting_NilParamsDoesNotShowParentheses(t *testing.T) {
+	var buf bytes.Buffer
+	printExecuting(&buf, store.Entry{Name: "build", Params: nil})
+
+	got := buf.String()
+	if strings.Contains(got, "(") || strings.Contains(got, ")") {
+		t.Fatalf("printExecuting output with nil Params = %q, want no parentheses", got)
+	}
+}
+
+func TestPrintExecuting_FormatIsCorrect(t *testing.T) {
+	tests := []struct {
+		name   string
+		entry  store.Entry
+		want   string
+	}{
+		{
+			name:  "no params",
+			entry: store.Entry{Name: "build", Command: "npm run build"},
+			want:  "> cl-exec: build",
+		},
+		{
+			name:  "single param",
+			entry: store.Entry{Name: "greet", Params: []string{"hello"}},
+			want:  "> cl-exec: greet (hello)",
+		},
+		{
+			name:  "multiple params",
+			entry: store.Entry{Name: "ssh", Params: []string{"admin", "prod.example.com"}},
+			want:  "> cl-exec: ssh (admin, prod.example.com)",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			printExecuting(&buf, tt.entry)
+			got := buf.String()
+			// Strip ANSI escape codes to compare the plain text content.
+			plain := stripANSI(got)
+			if strings.TrimSpace(plain) != tt.want {
+				t.Fatalf("printExecuting output plain text = %q, want %q", strings.TrimSpace(plain), tt.want)
+			}
+		})
+	}
+}
+
+// stripANSI removes ANSI escape sequences from s.
+func stripANSI(s string) string {
+	var b strings.Builder
+	inEscape := false
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\x1b' {
+			inEscape = true
+			continue
+		}
+		if inEscape {
+			if s[i] == 'm' {
+				inEscape = false
+			}
+			continue
+		}
+		b.WriteByte(s[i])
+	}
+	return b.String()
 }
 
 func TestPrintExecuting_DropsColorOnANonTerminalWriter(t *testing.T) {
