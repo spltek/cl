@@ -87,9 +87,9 @@ func TestPrintExecuting_NilParamsDoesNotShowParentheses(t *testing.T) {
 
 func TestPrintExecuting_FormatIsCorrect(t *testing.T) {
 	tests := []struct {
-		name   string
-		entry  store.Entry
-		want   string
+		name  string
+		entry store.Entry
+		want  string
 	}{
 		{
 			name:  "no params",
