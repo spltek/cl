@@ -187,7 +187,7 @@ func TestUpdate_EscCancelsWithoutSelection(t *testing.T) {
 
 	m, cmd := update(m, key(tea.KeyEsc))
 
-	if m.selected != (store.Entry{}) {
+	if m.selected.Name != "" {
 		t.Fatalf("selected = %+v, want zero value after Esc", m.selected)
 	}
 	if !m.quitting {
@@ -1359,6 +1359,15 @@ func TestPlaceholder_FullFlowResolvesAndQuits(t *testing.T) {
 	if got, want := m.selected.Command, "ssh admin@prod.example.com"; got != want {
 		t.Fatalf("selected.Command = %q, want %q", got, want)
 	}
+	if got, want := len(m.selected.Params), 2; got != want {
+		t.Fatalf("len(selected.Params) = %d, want %d", got, want)
+	}
+	if got, want := m.selected.Params[0], "admin"; got != want {
+		t.Fatalf("selected.Params[0] = %q, want %q", got, want)
+	}
+	if got, want := m.selected.Params[1], "prod.example.com"; got != want {
+		t.Fatalf("selected.Params[1] = %q, want %q", got, want)
+	}
 }
 
 func TestPlaceholder_DefaultsArePreFilled(t *testing.T) {
@@ -1400,6 +1409,15 @@ func TestPlaceholder_AcceptAllDefaultsProducesCorrectCommand(t *testing.T) {
 	if got, want := m.selected.Command, "git push origin main"; got != want {
 		t.Fatalf("selected.Command = %q, want %q", got, want)
 	}
+	if got, want := len(m.selected.Params), 2; got != want {
+		t.Fatalf("len(selected.Params) = %d, want %d", got, want)
+	}
+	if got, want := m.selected.Params[0], "origin"; got != want {
+		t.Fatalf("selected.Params[0] = %q, want %q", got, want)
+	}
+	if got, want := m.selected.Params[1], "main"; got != want {
+		t.Fatalf("selected.Params[1] = %q, want %q", got, want)
+	}
 }
 
 func TestPlaceholder_OverrideDefault(t *testing.T) {
@@ -1419,6 +1437,15 @@ func TestPlaceholder_OverrideDefault(t *testing.T) {
 
 	if got, want := m.selected.Command, "git push upstream main"; got != want {
 		t.Fatalf("selected.Command = %q, want %q", got, want)
+	}
+	if got, want := len(m.selected.Params), 2; got != want {
+		t.Fatalf("len(selected.Params) = %d, want %d", got, want)
+	}
+	if got, want := m.selected.Params[0], "upstream"; got != want {
+		t.Fatalf("selected.Params[0] = %q, want %q", got, want)
+	}
+	if got, want := m.selected.Params[1], "main"; got != want {
+		t.Fatalf("selected.Params[1] = %q, want %q", got, want)
 	}
 }
 
@@ -1550,6 +1577,18 @@ func TestPlaceholder_DefaultWithSpecialChars(t *testing.T) {
 	if got, want := m.selected.Command, "psql -h localhost -p 5432 -U postgres"; got != want {
 		t.Fatalf("selected.Command = %q, want %q", got, want)
 	}
+	if got, want := len(m.selected.Params), 3; got != want {
+		t.Fatalf("len(selected.Params) = %d, want %d", got, want)
+	}
+	if got, want := m.selected.Params[0], "localhost"; got != want {
+		t.Fatalf("selected.Params[0] = %q, want %q", got, want)
+	}
+	if got, want := m.selected.Params[1], "5432"; got != want {
+		t.Fatalf("selected.Params[1] = %q, want %q", got, want)
+	}
+	if got, want := m.selected.Params[2], "postgres"; got != want {
+		t.Fatalf("selected.Params[2] = %q, want %q", got, want)
+	}
 }
 
 func TestPlaceholder_SinglePlaceholderEntireCommand(t *testing.T) {
@@ -1575,6 +1614,12 @@ func TestPlaceholder_SinglePlaceholderEntireCommand(t *testing.T) {
 	}
 	if got, want := m.selected.Command, "hello world"; got != want {
 		t.Fatalf("selected.Command = %q, want %q", got, want)
+	}
+	if got, want := len(m.selected.Params), 1; got != want {
+		t.Fatalf("len(selected.Params) = %d, want %d", got, want)
+	}
+	if got, want := m.selected.Params[0], "hello world"; got != want {
+		t.Fatalf("selected.Params[0] = %q, want %q", got, want)
 	}
 }
 
@@ -1605,6 +1650,18 @@ func TestPlaceholder_DefaultWithBackslashesAndColons(t *testing.T) {
 	if got, want := m.selected.Command, "docker run -v /host/path:ro:/container/path node:18"; got != want {
 		t.Fatalf("selected.Command = %q, want %q", got, want)
 	}
+	if got, want := len(m.selected.Params), 3; got != want {
+		t.Fatalf("len(selected.Params) = %d, want %d", got, want)
+	}
+	if got, want := m.selected.Params[0], "/host/path:ro"; got != want {
+		t.Fatalf("selected.Params[0] = %q, want %q", got, want)
+	}
+	if got, want := m.selected.Params[1], "/container/path"; got != want {
+		t.Fatalf("selected.Params[1] = %q, want %q", got, want)
+	}
+	if got, want := m.selected.Params[2], "node:18"; got != want {
+		t.Fatalf("selected.Params[2] = %q, want %q", got, want)
+	}
 }
 
 func TestPlaceholder_ShowCommandTrueStillResolvesPlaceholders(t *testing.T) {
@@ -1631,6 +1688,15 @@ func TestPlaceholder_ShowCommandTrueStillResolvesPlaceholders(t *testing.T) {
 	// The caller always runs the resolved command directly.
 	if got, want := m.selected.Command, "ssh admin@prod.example.com"; got != want {
 		t.Fatalf("selected.Command = %q, want resolved command %q", got, want)
+	}
+	if got, want := len(m.selected.Params), 2; got != want {
+		t.Fatalf("len(selected.Params) = %d, want %d", got, want)
+	}
+	if got, want := m.selected.Params[0], "admin"; got != want {
+		t.Fatalf("selected.Params[0] = %q, want %q", got, want)
+	}
+	if got, want := m.selected.Params[1], "prod.example.com"; got != want {
+		t.Fatalf("selected.Params[1] = %q, want %q", got, want)
 	}
 }
 

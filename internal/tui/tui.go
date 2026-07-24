@@ -651,6 +651,7 @@ func (m model) updateFillPlaceholders(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.phIdx >= len(m.placeholders) {
 				// All placeholders filled: resolve and quit.
 				m.selected.Command = resolveCommand(m.selected.Command, m.placeholders, m.phVals)
+				m.selected.Params = m.phVals
 				m.quitting = true
 				return m, tea.Quit
 			}

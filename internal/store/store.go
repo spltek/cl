@@ -175,10 +175,14 @@ func (s *Store) Rename(oldName, newName string) bool {
 	return true
 }
 
-// Entry is a single name/command pair.
+// Entry is a single name/command pair. Params holds the resolved
+// placeholder values (if any) after the placeholder-filling flow;
+// it is never persisted and is only meaningful on the entry
+// returned by tui.Run.
 type Entry struct {
 	Name    string
 	Command string
+	Params  []string
 }
 
 // List returns all entries sorted alphabetically by name.

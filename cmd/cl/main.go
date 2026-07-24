@@ -112,7 +112,7 @@ func runDirectly(entry store.Entry) error {
 	defer ttyIn.Close()
 	defer ttyOut.Close()
 
-	printExecuting(ttyOut, entry.Name)
+	printExecuting(ttyOut, entry)
 
 	shellPath, shellArgs := shellCommand(entry.Command)
 	cmd := exec.Command(shellPath, shellArgs...)
@@ -128,9 +128,13 @@ func runDirectly(entry store.Entry) error {
 // wrapped in a colorprofile.Writer so the color is automatically
 // downgraded (or dropped, honoring NO_COLOR) to whatever w actually
 // supports, the same way Bubble Tea itself does for the picker.
-func printExecuting(w io.Writer, name string) {
+func printExecuting(w io.Writer, entry store.Entry) {
 	nameStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212"))
-	fmt.Fprintln(colorprofile.NewWriter(w, nil), "> Execute: "+nameStyle.Render(name))
+	line := "> Execute: " + nameStyle.Render(entry.Name)
+	if len(entry.Params) > 0 {
+		line += " (" + strings.Join(entry.Params, ", ") + ")"
+	}
+	fmt.Fprintln(colorprofile.NewWriter(w, nil), line)
 }
 
 // shellCommand returns the shell binary and arguments used to run

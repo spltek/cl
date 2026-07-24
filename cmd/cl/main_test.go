@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/silvio/cl/internal/store"
 )
 
 func withTempConfigDir(t *testing.T) {
@@ -31,7 +33,7 @@ func TestRun_HelpFlagsSucceed(t *testing.T) {
 
 func TestPrintExecuting_AnnouncesTheEntryName(t *testing.T) {
 	var buf bytes.Buffer
-	printExecuting(&buf, "build")
+	printExecuting(&buf, store.Entry{Name: "build"})
 
 	got := buf.String()
 	if !strings.Contains(got, "> Execute:") {
@@ -42,11 +44,29 @@ func TestPrintExecuting_AnnouncesTheEntryName(t *testing.T) {
 	}
 }
 
+func TestPrintExecuting_ShowsParamsInParentheses(t *testing.T) {
+	var buf bytes.Buffer
+	printExecuting(&buf, store.Entry{Name: "ssh", Params: []string{"admin", "prod.example.com"}})
+
+	got := buf.String()
+	if !strings.Contains(got, "(admin, prod.example.com)") {
+		t.Fatalf("printExecuting output = %q, want it to contain params %q", got, "(admin, prod.example.com)")
+	}
+	// Single param is also shown.
+	buf.Reset()
+	printExecuting(&buf, store.Entry{Name: "greet", Params: []string{"hello"}})
+
+	got = buf.String()
+	if !strings.Contains(got, "(hello)") {
+		t.Fatalf("printExecuting output with single param = %q, want it to contain %q", got, "(hello)")
+	}
+}
+
 func TestPrintExecuting_DropsColorOnANonTerminalWriter(t *testing.T) {
 	// buf isn't an *os.File, so colorprofile can't detect it as a
 	// terminal and must fall back to plain text - no escape codes.
 	var buf bytes.Buffer
-	printExecuting(&buf, "build")
+	printExecuting(&buf, store.Entry{Name: "build"})
 
 	if got := buf.String(); strings.Contains(got, "\x1b") {
 		t.Fatalf("printExecuting output = %q, want no ANSI escape codes for a non-terminal writer", got)
