@@ -233,7 +233,7 @@ enter run · esc cancel
 
 # Type the host and press Enter — the resolved command runs:
 
-> Execute: ssh server
+> Execute: ssh server (admin, prod.example.com)
 Last login: ...
 ```
 
