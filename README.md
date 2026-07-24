@@ -55,7 +55,7 @@ separate "add"/"remove" subcommand to remember:
   `ssh server (user, host)` or
   `git push (remote[default:origin], branch[default:main])`.
 - Commands are persisted as JSON in your user config directory
-  (`~/Library/Application Support/cl` on macOS, `~/.config/cl` on
+  (`~/Library/Application Support/cl` on macOS, `~/.local/share/cl` on
   Linux, `%AppData%\cl` on Windows) — written to disk immediately as
   each add/edit/remove is confirmed, not just when quit.
 
@@ -131,7 +131,7 @@ brew uninstall cl
 curl -fsSL https://raw.githubusercontent.com/spltek/cl/main/uninstall.sh | sh
 ```
 
-Removes the binary and config directory (`~/.local/bin/cl` and `~/.config/cl` or `~/Library/Application Support/cl`).
+Removes the binary and config directory (`~/.local/bin/cl` and `~/.local/share/cl` or `~/Library/Application Support/cl`).
 
 ### From a release (Windows)
 
@@ -231,7 +231,8 @@ host:
 _
 enter run · esc cancel
 
-# Type the host and press Enter — the resolved command runs:
+# Type the host and press Enter — cl announces the name in pink
+# with the resolved parameter values in gray, then runs the command:
 
 > cl-exec: ssh server (admin, prod.example.com)
 Last login: ...
@@ -333,8 +334,9 @@ ctrl+d delete selected
 ctrl+s command show toggle
 esc cancel
 
-# press Enter on "build": cl announces the name (colored) before
-# running it, then the command's own output follows normally
+# press Enter on "build": cl announces the name (in pink, the same
+# color used for the selected entry in the picker) before running
+# it, then the command's own output follows normally
 
 > cl-exec: build
 ...(build output)...
