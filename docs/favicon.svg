@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="CL — Command Launcher">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#071b28" />
+      <stop offset="1" stop-color="#00040a" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#bg)" />
+  <rect x="1.25" y="1.25" width="61.5" height="61.5" rx="13" fill="none" stroke="#5fe6f5" stroke-opacity=".4" />
+  <path d="M17 19 29.5 32 17 45" fill="none" stroke="#ff5fae" stroke-width="6.5" stroke-linecap="square" />
+  <rect x="34" y="38.5" width="15" height="6.5" fill="#5fe6f5" />
+</svg>

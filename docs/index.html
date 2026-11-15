@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CL — Command Launcher · Your shell, one keystroke away</title>
+<meta name="description" content="cl is a tiny personal command launcher. It keeps a name → shell command dictionary in a JSON file and gives you one interactive picker to search it, fill its placeholders and run it — without ever showing the command." />
+<meta name="author" content="SPLTEK" />
+<meta name="theme-color" content="#00050a" />
+<link rel="canonical" href="https://spltek.github.io/cl/" />
+
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="CL — Command Launcher" />
+<meta property="og:title" content="CL — Command Launcher" />
+<meta property="og:description" content="One picker. Every command. Names stay hidden, placeholders get filled, nothing is lost. A tiny Go binary for macOS, Linux and Windows." />
+<meta property="og:url" content="https://spltek.github.io/cl/" />
+<meta property="og:image" content="https://spltek.github.io/cl/assets/img/og.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="CL — Command Launcher: a cyan-on-black terminal picker listing named commands." />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="CL — Command Launcher" />
+<meta name="twitter:description" content="One picker. Every command. Names hidden, placeholders filled, JSON persisted." />
+<meta name="twitter:image" content="https://spltek.github.io/cl/assets/img/og.png" />
+<meta name="twitter:image:alt" content="CL — Command Launcher: a cyan-on-black terminal picker listing named commands." />
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "CL — Command Launcher",
+  "alternateName": "cl",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "macOS, Linux, Windows",
+  "url": "https://spltek.github.io/cl/",
+  "downloadUrl": "https://github.com/spltek/cl/releases",
+  "codeRepository": "https://github.com/spltek/cl",
+  "description": "A tiny personal command launcher: keep a name → shell command dictionary in JSON and run it from one interactive picker. No subcommands to memorise, no editor, no shell config.",
+  "license": "https://opensource.org/licenses/MIT",
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "author": { "@type": "Organization", "name": "SPLTEK", "url": "https://github.com/spltek" }
+}
+</script>
+
+<link rel="icon" href="favicon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="favicon.svg" />
+<link rel="preload" href="assets/fonts/chakra-petch-700.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="preload" href="assets/fonts/jetbrains-mono-var.woff2" as="font" type="font/woff2" crossorigin />
+<link rel="stylesheet" href="assets/fonts/fonts.css" />
+<link rel="stylesheet" href="assets/css/main.css" />
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<!-- ── atmosphere ─────────────────────────────────────────────────────── -->
+<div class="atmos" aria-hidden="true">
+  <div class="atmos__wall"></div>
+  <div class="atmos__grid"></div>
+  <div class="atmos__vignette"></div>
+  <div class="atmos__scan"></div>
+  <div class="atmos__grain"></div>
+  <div class="atmos__spot" id="spot"></div>
+</div>
+<div class="scroll-rail" aria-hidden="true"><span id="rail"></span></div>
+
+<!-- ── nav ────────────────────────────────────────────────────────────── -->
+<header class="nav" id="nav">
+  <div class="nav__inner">
+    <a class="brand" href="#top" aria-label="CL — Command Launcher, back to top">
+      <svg class="brand__mark" viewBox="0 0 40 30" aria-hidden="true">
+        <path d="M3 4h34v22H3z" fill="none" stroke="currentColor" stroke-width="1.6" opacity=".55" />
+        <path d="M8.5 10.5 13 15l-4.5 4.5" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="square" />
+        <rect x="16" y="18" width="9" height="2.4" fill="currentColor" />
+        <rect x="28" y="9.5" width="4" height="11" fill="currentColor" opacity=".8" />
+      </svg>
+      <span class="brand__word">CL</span>
+      <span class="brand__tag">COMMAND<br />LAUNCHER</span>
+    </a>
+
+    <nav class="nav__links" id="navLinks" aria-label="Sections">
+      <a href="#demo">Demo</a>
+      <a href="#why">Why</a>
+      <a href="#picker">Picker</a>
+      <a href="#placeholders">Placeholders</a>
+      <a href="#storage">Storage</a>
+      <a href="#install">Install</a>
+    </nav>
+
+    <a class="btn btn--ghost btn--sm nav__gh" href="https://github.com/spltek/cl" target="_blank" rel="noopener">
+      <svg viewBox="0 0 16 16" aria-hidden="true" class="btn__icon"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+      <span class="nav__gh-txt">GitHub</span>
+    </a>
+
+    <button class="nav__burger" id="burger" aria-expanded="false" aria-controls="navLinks" aria-label="Toggle navigation">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+  <div class="nav__progress" id="navProgress"></div>
+</header>
+
+<main id="main">
+  <span id="top"></span>
+
+  <!-- ── hero ─────────────────────────────────────────────────────────── -->
+  <section class="hero" id="demo" aria-labelledby="hero-title">
+    <div class="hud hud--tl"><span class="hud__dot"></span> SYS.CL_CORE // ONLINE</div>
+    <div class="hud hud--tr">DEVELOPED BY SPLTEK</div>
+    <div class="hud hud--bl">CLICK THE TERMINAL · TYPE TO FILTER</div>
+    <div class="hud hud--br"><span data-clock>--:--:--</span> LOCAL</div>
+
+    <div class="hero__grid">
+      <div class="hero__copy">
+        <p class="eyebrow"><span class="tick"></span> SPLTEK · COMMAND LAUNCHER</p>
+        <h1 class="wordmark" id="hero-title" data-glitch="CL">CL</h1>
+        <p class="hero__sub">COMMAND LAUNCHER</p>
+        <p class="hero__lede">
+          Every alias, one-liner and three-week-old incantation in one drawer.
+          <strong>cl</strong> keeps a <code>name → shell command</code> dictionary in a JSON file and
+          hands you a single interactive picker to search it — while the command itself
+          <strong>stays hidden</strong>.
+        </p>
+        <p class="hero__lede hero__lede--dim">
+          No add/remove subcommands to memorise. No editor, no temp files, no shell config.
+          One Go binary, three platforms, persisted to disk the instant you hit Enter.
+        </p>
+
+        <div class="hero__cta">
+          <a class="btn btn--brand" href="#install">
+            <svg viewBox="0 0 16 16" class="btn__icon" aria-hidden="true"><path fill="currentColor" d="M7.25 1.5h1.5v7.19l2.4-2.4 1.06 1.06L8 11.5 3.79 7.35l1.06-1.06 2.4 2.4V1.5ZM2 12h12v2H2v-2Z"/></svg>
+            Install cl
+          </a>
+          <a class="btn btn--ghost" href="https://github.com/spltek/cl" target="_blank" rel="noopener">
+            <svg viewBox="0 0 16 16" class="btn__icon" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+            Source on GitHub
+          </a>
+        </div>
+
+        <dl class="hero__stats">
+          <div><dt>binary</dt><dd data-count="1">1</dd></div>
+          <div><dt>subcommands</dt><dd data-count="0">0</dd></div>
+          <div><dt>platforms</dt><dd data-count="3">3</dd></div>
+          <div><dt>license</dt><dd>MIT</dd></div>
+        </dl>
+      </div>
+
+      <!-- live picker demo -->
+      <div class="hero__demo" data-reveal>
+        <div class="term" id="term">
+          <div class="term__bar">
+            <div class="term__dots" aria-hidden="true"><i></i><i></i><i></i></div>
+            <div class="term__title">cl — ~/projects/target-folder</div>
+            <div class="term__badge"><span class="term__pulse"></span> LIVE</div>
+          </div>
+
+          <div class="term__screen" id="termScreen" tabindex="0" role="application"
+               aria-label="Interactive demonstration of the cl command picker. Type to filter, arrow keys to move, Enter to run, Control plus A, E, R, D or S for add, edit, rename, delete and show-commands.">
+            <div class="term__invoke">
+              <span class="t-sign">$</span>
+              <span class="t-cmd">cl</span>
+              <span class="t-typed" id="tInvoke"></span>
+              <span class="t-caret" id="tInvokeCaret"></span>
+            </div>
+
+            <div class="term__picker">
+              <div class="term__ps1"><span class="t-dim">cl&gt;</span> <span id="tFilter"></span><span class="t-caret" id="tFilterCaret"></span></div>
+              <ul class="term__list" id="tList" role="listbox" aria-label="Commands"></ul>
+              <div class="term__empty" id="tEmpty" hidden>no matching commands</div>
+            </div>
+
+            <div class="term__ask" id="tAsk" hidden>
+              <div class="term__ask-q" id="tAskQ"></div>
+              <div class="term__ask-in"><span id="tAskIn"></span><span class="t-caret" id="tAskCaret"></span></div>
+              <div class="term__ask-hint" id="tAskHint"></div>
+            </div>
+
+            <div class="term__out" id="tOut" aria-live="polite" aria-atomic="false"></div>
+
+            <div class="term__hints" id="tHints">
+              <span><kbd>↑</kbd><kbd>↓</kbd> move</span>
+              <span><kbd>enter</kbd> run selected</span>
+              <span><kbd>ctrl</kbd>+<kbd>a</kbd> add</span>
+              <span><kbd>ctrl</kbd>+<kbd>e</kbd> edit</span>
+              <span><kbd>ctrl</kbd>+<kbd>r</kbd> rename</span>
+              <span><kbd>ctrl</kbd>+<kbd>d</kbd> delete</span>
+              <span><kbd>ctrl</kbd>+<kbd>s</kbd> show commands</span>
+              <span><kbd>esc</kbd> cancel</span>
+            </div>
+          </div>
+
+          <div class="term__touch" aria-label="Demo controls">
+            <button type="button" data-touch="up" aria-label="Move up">↑</button>
+            <button type="button" data-touch="down" aria-label="Move down">↓</button>
+            <button type="button" data-touch="enter" aria-label="Run selected">↵</button>
+            <button type="button" data-touch="ctrl+s">show</button>
+            <button type="button" data-touch="ctrl+a">+ add</button>
+            <button type="button" data-touch="escape" aria-label="Cancel">esc</button>
+          </div>
+
+          <div class="term__foot">
+            <span class="term__foot-l"><span class="term__pulse"></span> picker ready</span>
+            <span class="term__foot-r" id="tStatus">click terminal to focus</span>
+          </div>
+        </div>
+
+        <p class="demo-caption">
+          <span class="t-cyan">▸</span> Not a video. A real picker replica — try
+          <kbd>ctrl</kbd>+<kbd>s</kbd> or run <em>ssh server</em>.
+          <a class="demo-caption__link" href="#demo-video">Or watch the 4-minute film ↓</a>
+        </p>
+      </div>
+    </div>
+
+    <div class="scroll-cue" aria-hidden="true"><span></span></div>
+  </section>
+
+  <!-- ── demo film ────────────────────────────────────────────────────── -->
+  <section class="sect sect--film" id="demo-video" aria-labelledby="film-title">
+    <div class="sect__head" data-reveal>
+      <p class="sect__idx"><span>▶</span> / THE FILM</p>
+      <h2 class="sect__title" id="film-title">Four minutes,<br /><span class="grad">one picker.</span></h2>
+      <p class="sect__lede">
+        The real binary, captured end to end: filtering, placeholders,
+        <code>Ctrl</code>+<code>A</code>/<code>E</code>/<code>R</code>/<code>D</code> and the pink
+        <code>cl-exec</code> line. No cuts, no voiceover.
+      </p>
+    </div>
+
+    <figure class="film" data-reveal>
+      <div class="film__frame">
+        <div class="film__bar">
+          <span class="film__dots" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span class="film__name">cl // terminal session</span>
+          <span class="film__time"><span class="film__rec" aria-hidden="true"></span>04:04</span>
+        </div>
+
+        <div class="film__stage" data-film-stage>
+          <picture>
+            <source srcset="assets/img/cl-demo-poster.webp" type="image/webp" />
+            <img class="film__thumb" src="assets/img/cl-demo-poster.jpg"
+                 alt="The cl picker running in a terminal, listing named commands."
+                 width="1280" height="720" loading="lazy" decoding="async" />
+          </picture>
+          <button class="film__play" type="button" data-film-play>
+            <span class="film__play-btn" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+            </span>
+            <span class="film__play-txt">Play the demo<span>04:04 · YouTube</span></span>
+          </button>
+        </div>
+      </div>
+      <figcaption class="film__cap">
+        <span>Recorded by <a href="https://www.youtube.com/@splteklab" target="_blank" rel="noopener">spltek</a> · MIT</span>
+        <span>Nothing loads from YouTube until you press play ·
+          <a href="https://youtu.be/Oqw5H6Nlw00" target="_blank" rel="noopener">watch on YouTube</a></span>
+      </figcaption>
+    </figure>
+  </section>
+
+  <!-- ── marquee ──────────────────────────────────────────────────────── -->
+  <div class="marquee" aria-hidden="true">
+    <div class="marquee__row">
+      <div class="marquee__track" data-marquee>
+        <span>ssh {{user}}@{{host:prod.example.com}}</span><span class="dot">◆</span>
+        <span>kubectl apply -f production/overlays/us-east-1/kustomization.yaml</span><span class="dot">◆</span>
+        <span>git push {{remote:origin}} {{branch:main}}</span><span class="dot">◆</span>
+        <span>psql -h {{host:localhost}} -p {{port:5432}} -U {{user}} -d {{db:postgres}}</span><span class="dot">◆</span>
+        <span>cd ~/projects/target-folder &amp;&amp; exec $SHELL</span><span class="dot">◆</span>
+        <span>docker run -p {{port:3000}}:3000 {{image:node:18}}</span><span class="dot">◆</span>
+      </div>
+    </div>
+    <div class="marquee__row marquee__row--rev">
+      <div class="marquee__track" data-marquee>
+        <span class="k"><kbd>ctrl</kbd>+<kbd>a</kbd> add</span><span class="dot">/</span>
+        <span class="k"><kbd>ctrl</kbd>+<kbd>e</kbd> edit</span><span class="dot">/</span>
+        <span class="k"><kbd>ctrl</kbd>+<kbd>r</kbd> rename</span><span class="dot">/</span>
+        <span class="k"><kbd>ctrl</kbd>+<kbd>d</kbd> delete</span><span class="dot">/</span>
+        <span class="k"><kbd>ctrl</kbd>+<kbd>s</kbd> show</span><span class="dot">/</span>
+        <span class="k"><kbd>enter</kbd> run</span><span class="dot">/</span>
+        <span class="k"><kbd>esc</kbd> cancel</span><span class="dot">/</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 01 / why ─────────────────────────────────────────────────────── -->
+  <section class="sect" id="why" aria-labelledby="why-title">
+    <div class="sect__head" data-reveal>
+      <p class="sect__idx"><span>01</span> / WHY CL</p>
+      <h2 class="sect__title" id="why-title">Built for the command<br />you <span class="grad">keep retyping.</span></h2>
+      <p class="sect__lede">
+        Personal command launchers usually punish you with config files and subcommands.
+        <strong>cl</strong> is the opposite: one picker, one JSON file, and your fingers never leave the keys.
+      </p>
+    </div>
+
+    <div class="cards">
+      <article class="card" data-reveal>
+        <div class="card__icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h7" stroke="currentColor" stroke-width="1.7"/><path d="m16 15 3 3-3 3" stroke="currentColor" stroke-width="1.7" fill="none"/></svg></div>
+        <h3>One picker, zero ceremony</h3>
+        <p>There is no <b>add</b> or <b>remove</b> subcommand to remember. Run <code>cl</code>, type, press Enter. Adding is <kbd>ctrl</kbd>+<kbd>a</kbd> from inside the same list — where the command you just thought of already belongs.</p>
+        <div class="card__foot"><span class="tag">UX</span><span class="tag">no subcommands</span></div>
+      </article>
+
+      <article class="card" data-reveal>
+        <div class="card__icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6Z" stroke="currentColor" stroke-width="1.6" fill="none"/><circle cx="12" cy="12" r="2.6" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="m3 21 18-18" stroke="currentColor" stroke-width="1.8"/></svg></div>
+        <h3>The command stays hidden</h3>
+        <p>Names only, by default — so you can run something private in a shared screen without its value on display. <kbd>ctrl</kbd>+<kbd>s</kbd> peeks at commands; <b>Enter always runs the real thing</b>.</p>
+        <div class="card__foot"><span class="tag">privacy</span><span class="tag">display-only toggle</span></div>
+      </article>
+
+      <article class="card" data-reveal>
+        <div class="card__icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h4M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M10 9h4M10 13h4M10 17h4" stroke="currentColor" stroke-width="1.6"/></svg></div>
+        <h3>Placeholders, resolved live</h3>
+        <p><code>{{name}}</code> and <code>{{name:default}}</code> are detected the moment you pick a command. <b>cl</b> asks for each value in sequence, then announces the resolved name before running it.</p>
+        <div class="card__foot"><span class="tag">templating</span><span class="tag">defaults</span></div>
+      </article>
+
+      <article class="card" data-reveal>
+        <div class="card__icon"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="7.5" ry="3" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M4.5 6v12c0 1.66 3.36 3 7.5 3s7.5-1.34 7.5-3V6" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M4.5 12c0 1.66 3.36 3 7.5 3s7.5-1.34 7.5-3" stroke="currentColor" stroke-width="1.6" fill="none"/></svg></div>
+        <h3>Written the moment you confirm</h3>
+        <p>Every add, edit, rename and delete lands in the JSON file immediately — not when you quit. Kill the terminal, lose the SSH session, crash the machine: your commands are already on disk.</p>
+        <div class="card__foot"><span class="tag">durability</span><span class="tag">json</span></div>
+      </article>
+
+      <article class="card" data-reveal>
+        <div class="card__icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4z" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="m7 9 2.5 2.5L7 14" stroke="currentColor" stroke-width="1.7" fill="none"/><path d="M12 14h5" stroke="currentColor" stroke-width="1.7"/></svg></div>
+        <h3>No editor, no temp files</h3>
+        <p>Editing happens inline, pre-filled and editable. <b>Enter</b> asks <em>save?</em> — <kbd>y</kbd> writes, <kbd>n</kbd>/<kbd>esc</kbd> leaves the stored command untouched. Duplicate or empty names are rejected in place.</p>
+        <div class="card__foot"><span class="tag">inline</span><span class="tag">guarded</span></div>
+      </article>
+
+      <article class="card card--violet" data-reveal>
+        <div class="card__icon"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M9.5 2.5v3M14.5 2.5v3M9.5 18.5v3M14.5 18.5v3M2.5 9.5h3M2.5 14.5h3M18.5 9.5h3M18.5 14.5h3" stroke="currentColor" stroke-width="1.6"/></svg></div>
+        <h3>A single Go binary</h3>
+        <p>macOS, Linux and Windows from one static build. No runtime, no daemon, no background service, no telemetry — the picker exits the moment your command starts, and your shell takes over.</p>
+        <div class="card__foot"><span class="tag">go 1.25</span><span class="tag">0 deps</span></div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ── 02 / picker ──────────────────────────────────────────────────── -->
+  <section class="sect" id="picker" aria-labelledby="picker-title">
+    <div class="sect__head" data-reveal>
+      <p class="sect__idx"><span>02</span> / THE PICKER</p>
+      <h2 class="sect__title" id="picker-title">Ten keys.<br /><span class="grad">Everything else is typing.</span></h2>
+      <p class="sect__lede">
+        Filtering is a case-insensitive substring match — the <strong>whole</strong> typed text has to appear
+        together, not its letters scattered anywhere. Arrows move, <kbd>Enter</kbd> runs, <kbd>esc</kbd> cancels.
+      </p>
+    </div>
+
+    <div class="picker-grid">
+      <div class="keys" id="keys" data-reveal>
+        <div class="keys__row" data-key-row>
+          <span class="keys__combo"><kbd>↑</kbd><kbd>↓</kbd></span>
+          <span class="keys__what"><b>Move</b><span>Step through the filtered list.</span></span>
+        </div>
+        <div class="keys__row" data-key-row>
+          <span class="keys__combo"><kbd>enter</kbd></span>
+          <span class="keys__what"><b>Run selected</b><span>Always runs the command — the toggle never changes that.</span></span>
+        </div>
+        <div class="keys__row" data-key-row>
+          <span class="keys__combo"><kbd>ctrl</kbd><span class="plus">+</span><kbd>a</kbd></span>
+          <span class="keys__what"><b>Add</b><span>Prompts for a name (spaces allowed), then the shell command.</span></span>
+        </div>
+        <div class="keys__row" data-key-row>
+          <span class="keys__combo"><kbd>ctrl</kbd><span class="plus">+</span><kbd>e</kbd></span>
+          <span class="keys__what"><b>Edit</b><span>Current value pre-filled. Enter → <em>save?</em></span></span>
+        </div>
+        <div class="keys__row" data-key-row>
+          <span class="keys__combo"><kbd>ctrl</kbd><span class="plus">+</span><kbd>r</kbd></span>
+          <span class="keys__what"><b>Rename</b><span>Current name pre-filled; duplicate names rejected in place.</span></span>
+        </div>
+        <div class="keys__row" data-key-row>
+          <span class="keys__combo"><kbd>ctrl</kbd><span class="plus">+</span><kbd>d</kbd></span>
+          <span class="keys__what"><b>Delete</b><span>Asks first — <kbd>y</kbd> confirms, <kbd>N</kbd> is the default.</span></span>
+        </div>
+        <div class="keys__row" data-key-row>
+          <span class="keys__combo"><kbd>ctrl</kbd><span class="plus">+</span><kbd>s</kbd></span>
+          <span class="keys__what"><b>Toggle commands</b><span>Display-only, persisted immediately, remembered next time.</span></span>
+        </div>
+        <div class="keys__row" data-key-row>
+          <span class="keys__combo"><kbd>esc</kbd></span>
+          <span class="keys__what"><b>Cancel</b><span>Back out of any prompt. Nothing is written.</span></span>
+        </div>
+      </div>
+
+      <div class="view-demo" data-reveal>
+        <div class="view-demo__head">
+          <div class="view-demo__title"><span class="t-dim">list view</span> <span class="t-pink">/</span> <span id="viewState">names only</span></div>
+          <label class="switch">
+            <input type="checkbox" id="showToggle" />
+            <span class="switch__track"><span class="switch__knob"></span></span>
+            <span class="switch__label"><kbd>ctrl</kbd>+<kbd>s</kbd></span>
+          </label>
+        </div>
+
+        <ul class="view-demo__list" id="viewList" data-show="false">
+          <li class="is-sel"><span class="vw-arrow">&gt;</span><span class="vw-name">build</span><span class="vw-cmd">npm run build -- --watch</span></li>
+          <li><span class="vw-arrow">&nbsp;</span><span class="vw-name">ssh server</span><span class="vw-hint">(user, host[default:prod.example.com])</span><span class="vw-cmd">ssh {{user}}@{{host:prod.example.com}}</span></li>
+          <li><span class="vw-arrow">&nbsp;</span><span class="vw-name">deploy</span><span class="vw-cmd">kubectl apply -f production/overlays/us-east-1/kustomization.yaml --prune --selector app=api</span></li>
+          <li><span class="vw-arrow">&nbsp;</span><span class="vw-name">go to project</span><span class="vw-cmd">cd ~/projects/target-folder &amp;&amp; exec $SHELL</span></li>
+        </ul>
+
+        <div class="view-demo__note">
+          <span class="t-pink">◂</span> With <b>show</b> on, long commands wrap under their name — you always know
+          what Enter is about to launch.
+        </div>
+        <div class="view-demo__note">
+          <span class="t-cyan">◂</span> Placeholder hints ride along with the name, whether commands are
+          visible or hidden.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 03 / placeholders ────────────────────────────────────────────── -->
+  <section class="sect" id="placeholders" aria-labelledby="ph-title">
+    <div class="sect__head" data-reveal>
+      <p class="sect__idx"><span>03</span> / PLACEHOLDERS</p>
+      <h2 class="sect__title" id="ph-title">Templates that<br /><span class="grad">ask nicely.</span></h2>
+      <p class="sect__lede">
+        Put <code>{{name}}</code> where a value goes and <code>{{name:default}}</code> where you usually
+        reuse one. <strong>cl</strong> prompts for each in order, pre-fills the defaults, then announces the
+        run in pink with the values in grey.
+      </p>
+
+      <ul class="ticks">
+        <li><b>Required</b> — <code>{{name}}</code> cannot be skipped; the run waits for a value.</li>
+        <li><b>Optional</b> — <code>{{name:default}}</code> arrives pre-filled; <kbd>Enter</kbd> accepts it.</li>
+        <li><b>Visible</b> — the list shows <code>(user, host)</code> or <code>(remote[default:origin])</code> as a hint.</li>
+        <li><b>Independent</b> — placeholders resolve whether or not commands are shown.</li>
+      </ul>
+    </div>
+
+    <div class="ph-grid">
+      <div class="ph-templates" data-reveal role="tablist" aria-label="Example command templates">
+        <button class="ph-tpl is-active" data-tpl="ssh" role="tab" aria-selected="true">
+          <span class="ph-tpl__name">ssh server</span>
+          <span class="ph-tpl__cmd">ssh {{user}}@{{host:prod.example.com}}</span>
+        </button>
+        <button class="ph-tpl" data-tpl="git" role="tab" aria-selected="false">
+          <span class="ph-tpl__name">git push</span>
+          <span class="ph-tpl__cmd">git push {{remote:origin}} {{branch:main}}</span>
+        </button>
+        <button class="ph-tpl" data-tpl="psql" role="tab" aria-selected="false">
+          <span class="ph-tpl__name">psql main</span>
+          <span class="ph-tpl__cmd">psql -h {{host:localhost}} -p {{port:5432}} -U {{user}} -d {{db:postgres}}</span>
+        </button>
+        <button class="ph-tpl" data-tpl="docker" role="tab" aria-selected="false">
+          <span class="ph-tpl__name">docker node</span>
+          <span class="ph-tpl__cmd">docker run -p {{port:3000}}:3000 {{image:node:18}}</span>
+        </button>
+      </div>
+
+      <div class="ph-lab" data-reveal>
+        <div class="ph-lab__bar">
+          <span class="ph-lab__dot"></span>
+          <span class="ph-lab__name" id="phName">ssh server</span>
+          <span class="ph-lab__tag">resolver</span>
+        </div>
+        <div class="ph-lab__fields" id="phFields"></div>
+        <div class="ph-lab__resolved">
+          <div class="ph-lab__label">resolved command</div>
+          <div class="ph-lab__cmd" id="phResolved"></div>
+        </div>
+        <div class="ph-lab__announce">
+          <span class="announce-name" id="phAnnounceName">&gt; cl-exec: ssh server</span>
+          <span class="announce-vals" id="phAnnounceVals">(admin, prod.example.com)</span>
+        </div>
+        <div class="ph-lab__out" id="phOut">Last login: Tue Nov 12 09:41:07 on ttys002 <span class="t-dim">· running…</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 04 / storage ─────────────────────────────────────────────────── -->
+  <section class="sect" id="storage" aria-labelledby="st-title">
+    <div class="sect__head" data-reveal>
+      <p class="sect__idx"><span>04</span> / STORAGE</p>
+      <h2 class="sect__title" id="st-title">A JSON file.<br /><span class="grad">That's the whole database.</span></h2>
+      <p class="sect__lede">
+        Commands live in your user config directory — never in a project, never in a dotfile you hand-edit.
+        Writes happen as each add, edit, rename or delete is confirmed.
+      </p>
+    </div>
+
+    <div class="store-grid">
+      <div class="store-paths" data-reveal>
+        <div class="tabs" role="tablist" aria-label="Config directory by platform">
+          <button class="tab is-active" role="tab" aria-selected="true" data-os="mac">macOS</button>
+          <button class="tab" role="tab" aria-selected="false" data-os="linux">Linux</button>
+          <button class="tab" role="tab" aria-selected="false" data-os="win">Windows</button>
+        </div>
+        <div class="path-box">
+          <span class="path-box__label">config dir</span>
+          <code class="path-box__val" id="osPath">~/Library/Application Support/cl</code>
+          <button class="copy" data-copy="~/Library/Application Support/cl" aria-label="Copy path">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.4" d="M5.5 5.5V3.2c0-.4.3-.7.7-.7h7c.4 0 .7.3.7.7v7c0 .4-.3.7-.7.7h-2.3"/><rect x="2.1" y="5.1" width="8.8" height="8.8" rx=".9" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>
+          </button>
+        </div>
+        <p class="store-note" id="osNote">Written on first launch. Installed to <code>~/.local/bin</code> by the release installer.</p>
+
+        <ul class="ticks ticks--tight">
+          <li><b>Portable</b> — copy the JSON to another machine and your commands come with you.</li>
+          <li><b>Readable</b> — plain text, no lock-in, no migrations, no schema.</li>
+          <li><b>Inspectable</b> — cat it, diff it, version it. It is just your commands.</li>
+        </ul>
+      </div>
+
+      <div class="code-card" data-reveal>
+        <div class="code-card__bar">
+          <span class="code-card__file">commands.json</span>
+          <span class="code-card__meta">written immediately</span>
+        </div>
+        <pre><code><span class="c-p">{</span>
+  <span class="c-k">"build"</span><span class="c-p">:</span> <span class="c-s">"npm run build -- --watch"</span><span class="c-p">,</span>
+  <span class="c-k">"ssh server"</span><span class="c-p">:</span> <span class="c-s">"ssh {{user}}@{{host:prod.example.com}}"</span><span class="c-p">,</span>
+  <span class="c-k">"git push"</span><span class="c-p">:</span> <span class="c-s">"git push {{remote:origin}} {{branch:main}}"</span><span class="c-p">,</span>
+  <span class="c-k">"psql main"</span><span class="c-p">:</span> <span class="c-s">"psql -h {{host:localhost}} -p {{port:5432}} -U {{user}} -d {{db:postgres}}"</span><span class="c-p">,</span>
+  <span class="c-k">"go to project"</span><span class="c-p">:</span> <span class="c-s">"cd ~/projects/target-folder &amp;&amp; exec $SHELL"</span><span class="c-p">,</span>
+  <span class="c-k">"deploy"</span><span class="c-p">:</span> <span class="c-s">"kubectl apply -f production/overlays/us-east-1/kustomization.yaml --prune --selector app=api"</span>
+<span class="c-p">}</span></code></pre>
+        <div class="code-card__foot">
+          <span class="t-dim">names are unique · empty values rejected in place</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 05 / shell builtins ──────────────────────────────────────────── -->
+  <section class="sect" id="builtins" aria-labelledby="bi-title">
+    <div class="sect__head sect__head--left" data-reveal>
+      <p class="sect__idx"><span>05</span> / SHELL STATE</p>
+      <h2 class="sect__title" id="bi-title">Some commands need<br /><span class="grad">a shell to live in.</span></h2>
+      <p class="sect__lede">
+        <strong>cl</strong> runs your command in a subshell. Builtins that mutate the shell — <code>cd</code>,
+        <code>source</code>, <code>export</code> — evaporate with it. Append <code>&amp;&amp; exec $SHELL</code>
+        and the launcher replaces the subshell with a fresh interactive shell instead.
+      </p>
+    </div>
+
+    <div class="builtins-grid">
+      <div class="builtin-card" data-reveal>
+        <div class="builtin-card__label">the pattern</div>
+        <pre><code>cd ~/projects/target-folder <span class="c-hi">&amp;&amp; exec $SHELL</span></code></pre>
+        <p>Pick <em>go to project</em> and the current terminal is replaced by a new shell <b>in the target directory</b> — the <code>cd</code> actually persists.</p>
+        <div class="builtin-card__note">
+          Regular commands — <code>git</code>, <code>npm</code>, <code>docker</code>, <code>ssh</code> — need nothing extra.
+        </div>
+      </div>
+
+      <div class="builtin-table" data-reveal>
+        <div class="builtin-table__head">
+          <span>command</span><span>why it needs <code>&amp;&amp; exec $SHELL</code></span>
+        </div>
+        <div class="builtin-table__row"><code>cd</code><span>Changes directory only in the subshell, then it's lost.</span></div>
+        <div class="builtin-table__row"><code>source</code><span>Sources a file in a subshell, leaving your env unchanged.</span></div>
+        <div class="builtin-table__row"><code>.</code><span>Same as <code>source</code> — the dot builtin.</span></div>
+        <div class="builtin-table__row"><code>export</code><span>Sets env vars that disappear when the subshell ends.</span></div>
+        <div class="builtin-table__row"><code>alias</code><span>Defines aliases that are lost when the subshell exits.</span></div>
+        <div class="builtin-table__row"><code>unset</code><span>Unsets variables only in the subshell.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 06 / install ─────────────────────────────────────────────────── -->
+  <section class="sect" id="install" aria-labelledby="in-title">
+    <div class="sect__head" data-reveal>
+      <p class="sect__idx"><span>06</span> / INSTALL</p>
+      <h2 class="sect__title" id="in-title">Four ways in.<br /><span class="grad">No sudo, no admin.</span></h2>
+      <p class="sect__lede">
+        Every installer writes into your own home directory and edits your own shell rc files —
+        plain per-user operations. Pick the one that matches your machine.
+      </p>
+    </div>
+
+    <div class="install" data-reveal>
+      <div class="tabs tabs--install" role="tablist" aria-label="Installation methods">
+        <button class="tab is-active" role="tab" aria-selected="true" data-inst="brew">Homebrew</button>
+        <button class="tab" role="tab" aria-selected="false" data-inst="curl">macOS / Linux</button>
+        <button class="tab" role="tab" aria-selected="false" data-inst="win">Windows</button>
+        <button class="tab" role="tab" aria-selected="false" data-inst="src">From source</button>
+      </div>
+
+      <div class="install__panel" id="instPanel" data-inst-panel="brew">
+        <div class="install__line">
+          <span class="install__prompt">$</span>
+          <code id="instCmd">brew install spltek/tap/cl</code>
+          <button class="copy" data-copy="brew install spltek/tap/cl" aria-label="Copy install command">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.4" d="M5.5 5.5V3.2c0-.4.3-.7.7-.7h7c.4 0 .7.3.7.7v7c0 .4-.3.7-.7.7h-2.3"/><rect x="2.1" y="5.1" width="8.8" height="8.8" rx=".9" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>
+          </button>
+        </div>
+        <p class="install__desc" id="instDesc">The fastest path on macOS and Linux. Updates arrive through <code>brew upgrade</code>.</p>
+      </div>
+
+      <div class="install__meta">
+        <div class="install__meta-item">
+          <span class="k">installs to</span>
+          <span class="v"><code>~/.local/bin/cl</code> · <code>%LOCALAPPDATA%\cl\bin</code></span>
+        </div>
+        <div class="install__meta-item">
+          <span class="k">requires</span>
+          <span class="v" id="instReq">Homebrew · or build with Go 1.25+</span>
+        </div>
+        <div class="install__meta-item">
+          <span class="k">shell rc</span>
+          <span class="v">PATH updated per-user, never machine-wide</span>
+        </div>
+      </div>
+
+      <details class="uninstall">
+        <summary>Uninstall</summary>
+        <div class="uninstall__body">
+          <div class="uninstall__row"><span>Homebrew</span><code>brew uninstall cl</code></div>
+          <div class="uninstall__row"><span>macOS / Linux</span><code>curl -fsSL https://raw.githubusercontent.com/spltek/cl/main/uninstall.sh | sh</code></div>
+          <div class="uninstall__row"><span>Windows</span><code>iwr https://raw.githubusercontent.com/spltek/cl/main/uninstall.ps1 -UseBasicParsing | iex</code></div>
+        </div>
+      </details>
+    </div>
+
+    <div class="install__cards">
+      <div class="mini" data-reveal>
+        <span class="mini__k">01</span>
+        <h4>Release binary</h4>
+        <p>Downloads the right binary for your OS and arch from the latest release. Override the destination with <code>CL_INSTALL_DIR</code>.</p>
+      </div>
+      <div class="mini" data-reveal>
+        <span class="mini__k">02</span>
+        <h4>Build it yourself</h4>
+        <p>Go 1.25+. <code>make install-local</code> compiles and installs to <code>~/.local/bin</code>, then prints the one command to activate it in your current shell.</p>
+      </div>
+      <div class="mini" data-reveal>
+        <span class="mini__k">03</span>
+        <h4>Windows quirks</h4>
+        <p>If your execution policy is <code>Restricted</code> or <code>AllSigned</code>, run <code>Set-ExecutionPolicy -Scope CurrentUser RemoteSigned</code> first.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── closing quote / cta ──────────────────────────────────────────── -->
+  <section class="cta" aria-labelledby="cta-title">
+    <div class="cta__glow" aria-hidden="true"></div>
+    <div class="cta__inner" data-reveal>
+      <p class="eyebrow"><span class="tick"></span> END OF LINE</p>
+      <blockquote class="cta__quote">
+        “All those moments will be lost in time…<br />
+        like <span class="grad">uncommitted changes</span> before a force push.”
+      </blockquote>
+      <p class="cta__sub">Time to launch.</p>
+      <div class="cta__actions">
+        <a class="btn btn--brand" href="#install">Install cl</a>
+        <a class="btn btn--ghost" href="https://github.com/spltek/cl" target="_blank" rel="noopener">Star on GitHub</a>
+      </div>
+      <div class="cta__line" aria-hidden="true"><span></span></div>
+    </div>
+  </section>
+</main>
+
+<!-- ── footer ─────────────────────────────────────────────────────────── -->
+<footer class="foot">
+  <div class="foot__inner">
+    <div class="foot__brand">
+      <a class="brand" href="#top" aria-label="CL — back to top">
+        <svg class="brand__mark" viewBox="0 0 40 30" aria-hidden="true">
+          <path d="M3 4h34v22H3z" fill="none" stroke="currentColor" stroke-width="1.6" opacity=".55" />
+          <path d="M8.5 10.5 13 15l-4.5 4.5" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="square" />
+          <rect x="16" y="18" width="9" height="2.4" fill="currentColor" />
+          <rect x="28" y="9.5" width="4" height="11" fill="currentColor" opacity=".8" />
+        </svg>
+        <span class="brand__word">CL</span>
+      </a>
+      <p class="foot__tag">A tiny personal command launcher by SPLTEK.<br />MIT licensed. No telemetry. No daemon.</p>
+      <p class="foot__status"><span class="hud__dot"></span> SYS.CL_CORE // ONLINE</p>
+    </div>
+
+    <nav class="foot__col" aria-label="Project links">
+      <h4>Project</h4>
+      <a href="https://github.com/spltek/cl" target="_blank" rel="noopener">GitHub repository</a>
+      <a href="https://github.com/spltek/cl/releases" target="_blank" rel="noopener">Releases</a>
+      <a href="https://github.com/spltek/cl/issues" target="_blank" rel="noopener">Issues</a>
+      <a href="https://github.com/spltek/cl/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
+    </nav>
+
+    <nav class="foot__col" aria-label="Documentation links">
+      <h4>Docs</h4>
+      <a href="https://github.com/spltek/cl#readme" target="_blank" rel="noopener">README</a>
+      <a href="#picker">Key bindings</a>
+      <a href="#placeholders">Placeholders</a>
+      <a href="#builtins">Shell builtins</a>
+    </nav>
+
+    <div class="foot__col">
+      <h4>Install</h4>
+      <button class="foot__cmd" data-copy="brew install spltek/tap/cl">brew install spltek/tap/cl</button>
+      <button class="foot__cmd" data-copy="curl -fsSL https://raw.githubusercontent.com/spltek/cl/main/install.sh | sh">curl install.sh</button>
+      <a href="#install">All methods</a>
+    </div>
+  </div>
+
+  <div class="foot__bar">
+    <span>© <span id="year">2025</span> SPLTEK · CL — COMMAND LAUNCHER</span>
+    <span class="foot__bar-mid">BUILT WITH ONE PICKER AND NO SUBCOMMANDS</span>
+    <span class="foot__clock"><span data-clock>--:--:--</span> LOCAL</span>
+  </div>
+
+  <div class="foot__credit">
+    <span>Site built with <strong>Harny</strong> —
+      <a href="https://harny.dev" target="_blank" rel="noopener">harny.dev</a></span>
+    <span class="foot__credit-model">DeepSeek v4.1 Flash</span>
+  </div>
+</footer>
+
+<noscript>
+  <div class="noscript">This page uses JavaScript for the interactive picker demo. The rest of the site — features, install commands and docs — works without it.</div>
+</noscript>
+
+<script src="assets/js/main.js" defer></script>
+</body>
+</html>

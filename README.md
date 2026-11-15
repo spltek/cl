@@ -61,6 +61,10 @@ separate "add"/"remove" subcommand to remember:
 
 https://github.com/user-attachments/assets/59bba6b9-573e-4b95-ac08-251a9d5dbd0f
 
+**Website:** [spltek.github.io/cl](https://spltek.github.io/cl/) — interactive demo of the
+picker, install snippets and the demo film. The site lives in [`docs/`](docs/) and is
+published by GitHub Pages (source: `main` → `/docs`).
+
 ## Install
 
 ### Homebrew (macOS/Linux)
